@@ -217,6 +217,19 @@
   .s-ctl-icon svg { width: 20px; height: 20px; display: block; }
   .s-toggle { display: inline-flex; border: 1px solid; border-radius: 8px; overflow: hidden; }
   .s-ctl-seg { padding: 6px 14px; border: 0; border-radius: 0; }
+  .shot { display: block; padding: 0; background-repeat: no-repeat; border-radius: 6px; border: 1px solid rgba(127,127,127,.25); cursor: zoom-in; }
+  .shot:hover { box-shadow: var(--ui-shadow-card); }
+  .shot-dialog { border: 1px solid var(--ui-line); border-radius: 12px; padding: 0; background: var(--ui-panel); color: var(--ui-text); max-width: 92vw; max-height: 88vh; }
+  .shot-dialog::backdrop { background: rgba(0,0,0,.45); }
+  .shot-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 12px 14px; border-bottom: 1px solid var(--ui-line); }
+  .shot-head .shot-name { display: block; }
+  .shot-close { flex-shrink: 0; border: 0; background: none; border-radius: 6px; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--ui-muted); }
+  .shot-close:hover { color: var(--ui-text); background: var(--ui-canvas); }
+  .shot-close svg { width: 20px; height: 20px; }
+  .shot-body { padding: 16px; overflow: auto; max-height: calc(88vh - 70px); }
+  .shot-full { display: block; background-repeat: no-repeat; border: 1px solid rgba(127,127,127,.25); }
+  .shot-name { font-size: 11px; color: var(--ui-muted); }
+  .shot-none { color: var(--ui-muted); }
   .measured { display: block; font-size: 11px; color: var(--ui-muted); }
   .s-input { padding: 7px 10px; border-radius: 8px; border: 1px solid; min-width: 120px; }
   .s-stack { display: flex; flex-direction: column; gap: 4px; }
@@ -243,19 +256,24 @@
   <section class="panel rows" aria-labelledby="rowsTitleText">
     <div class="rows-head" id="rowsTitle"><h2 id="rowsTitleText">Elements</h2><span class="info">
       <button type="button" class="info-btn" aria-label="How to read" aria-describedby="howTo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>
-      <span class="pop" id="howTo" role="tooltip"><span class="pop-box"><b>How to read.</b> “Current implementation” shows the colours from the code. “Proposal” uses the palette on the left: agreed values, chosen decision options and your own edits (saved in this browser only). Threshold is 4.5 for text and 3.0 for large text, icons and boundaries. Translucent layers and <code>opacity</code> are blended onto the background before the ratio is computed. A row marked “measured in the audit” shows in Current what the audit measured, because the code’s colours are not what ships (for example a focus ring the theme declares but a component removes); its Proposal assumes that fix. Focus rows draw the real control with its ring and take the worse of ring / surface around and ring / control. “Failing now” counts Current, “still failing” counts Proposal. Green row: the proposal passes. Reddish: changed but still failing. Plain: unchanged and failing. Click a row, or focus its name and press Enter, to see only its tokens in the palette. Show all tokens brings the rest back. Click a token, or focus its name and press Enter, to see only the elements that use it. Show all elements brings the rest back. In an open decision, click an option to choose it for the theme you are looking at and copy the choice for the agent; other themes stay open.</span></span>
+      <span class="pop" id="howTo" role="tooltip"><span class="pop-box"><b>How to read.</b> “Current implementation” shows the colours from the code. “Proposal” uses the palette on the left: agreed values, chosen decision options and your own edits (saved in this browser only). Threshold is 4.5 for text and 3.0 for large text, icons and boundaries. Translucent layers and <code>opacity</code> are blended onto the background before the ratio is computed. A row marked “measured in the audit” shows in Current what the audit measured, because the code’s colours are not what ships (for example a focus ring the theme declares but a component removes); its Proposal assumes that fix. Focus rows draw the real control with its ring and take the worse of ring / surface around and ring / control. “Failing now” counts Current, “still failing” counts Proposal. Screenshot is the element cut out of the audit’s screenshot of this theme, with a few pixels around it; click it to see it 1:1. Green row: the proposal passes. Reddish: changed but still failing. Plain: unchanged and failing. Click a row, or focus its name and press Enter, to see only its tokens in the palette. Show all tokens brings the rest back. Click a token, or focus its name and press Enter, to see only the elements that use it. Show all elements brings the rest back. In an open decision, click an option to choose it for the theme you are looking at and copy the choice for the agent; other themes stay open.</span></span>
     </span>
     <button type="button" class="btn pal-show" id="showAllElements" hidden>Show all elements</button>
     </div>
     <div class="scroll">
       <table>
-        <thead><tr><th scope="col">Element</th><th scope="col">Current implementation</th><th scope="col">Proposal</th><th scope="col">Threshold</th></tr></thead>
+        <thead><tr><th scope="col">Element</th><th scope="col">Screenshot</th><th scope="col">Current implementation</th><th scope="col">Proposal</th><th scope="col">Threshold</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
   </section>
 </main>
 <div class="toast" id="toast" role="status"></div>
+<dialog class="shot-dialog" id="shotDialog" aria-labelledby="shotTitle">
+  <div class="shot-head"><div><b id="shotTitle"></b><span class="shot-name" id="shotFile"></span></div>
+    <button type="button" class="shot-close" id="shotClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+  <div class="shot-body" id="shotBody"></div>
+</dialog>
 
 <script id="lab-data" type="application/json">{"version":1,"meta":{"id":"example","title":"Contrast Lab · example","project":"Example","font":{"stack":"\"Inter\", system-ui, sans-serif","css":[]}},"themes":[{"id":"light","label":"Light"},{"id":"dark","label":"Dark"}],"tokens":[{"name":"background","group":"Surfaces","desc":"Page background","source":"src/app/globals.css:22","values":{"light":"#f4f6f8","dark":"#1a1412"}},{"name":"card","group":"Surfaces","desc":"Cards and dialogs","source":"src/app/globals.css:25","values":{"light":"#ffffff","dark":"#26201d"}},{"name":"primary","group":"Brand","desc":"Logo colour: button fill (do not change)","source":"src/app/globals.css:34","values":{"light":"#e96d46","dark":"#f0845f"}},{"name":"primary-foreground","group":"Brand","desc":"Text on the primary fill","source":"src/app/globals.css:35","values":{"light":"#ffffff","dark":"#2a1610"}},{"name":"primary-text","group":"Brand","desc":"New: primary as a text colour. Today = primary","values":{"light":"#e96d46","dark":"#f0845f"}},{"name":"sev-high","group":"Hardcoded → new token","desc":"HIGH: text-rose-600 in lib/severity.ts","source":"src/lib/severity.ts:14","values":{"light":"#ec003f","dark":"#ec003f"}},{"name":"sev-high-bg","group":"Hardcoded → new token","desc":"HIGH badge background: bg-rose-500/10","source":"src/lib/severity.ts:15","values":{"light":"#ff20561a","dark":"#ff20561a"}}],"proposal":{"light":{"primary-foreground":"#2a1610","primary-text":"#b94117"},"dark":{}},"rows":[{"id":"btn-primary","group":"Brand","label":"Primary button","where":"ui/Button.tsx:5","src":"audit","routes":["/login"],"need":4.5,"kind":"btn","text":"Sign In","fg":"primary-foreground","bg":["primary"],"stage":["card"]},{"id":"btn-primary-disabled","group":"Brand","label":"Primary button: disabled","where":"ui/Button.tsx:44, disabled:opacity-50","src":"audit","need":4.5,"info":true,"opacity":0.5,"base":"card","kind":"btn","text":"Sign In","fg":"primary-foreground","bg":["primary"],"stage":["card"]},{"id":"eyebrow","group":"Brand","label":"Eyebrow on the page background","where":"(home)/page.tsx:88","src":"audit","routes":["/"],"need":4.5,"kind":"eyebrow","text":"Browse by impact","fg":"primary-text","bg":["background"]},{"id":"sev-high","group":"Severity","label":"HIGH badge","where":"ImpactGroupList.tsx:273, 9px","src":"ticket 796","routes":["/bills/[id]"],"need":4.5,"kind":"sev","text":"High","fg":"sev-high","bg":["card","sev-high-bg"],"decision":"severity"},{"id":"sev-high-icon","group":"Severity","label":"Evidence icon: Mandates","where":"ImpactEvidenceLinks.tsx:26","src":"ticket 796","need":3,"kind":"icon","icon":"shield","fg":"sev-high","bg":["card"],"decision":"severity"}],"decisions":[{"id":"severity","title":"Severity HIGH","status":"open","chosen":null,"options":[{"id":"A","label":"One step darker / lighter (700 / 400), solid 50 / 950 background","tokens":{"light":{"sev-high":"#c70036","sev-high-bg":"#fff1f2"},"dark":{"sev-high":"#ff637e","sev-high-bg":"#4d0218"}}},{"id":"B","label":"One more step of contrast (800 / 300)","note":"Pastel in dark theme; levels are harder to tell apart","tokens":{"light":{"sev-high":"#a50036","sev-high-bg":"#fff1f2"},"dark":{"sev-high":"#ffa1ad","sev-high-bg":"#4d0218"}}}]}],"icons":{"shield":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"/><\/svg>"}}</script>
 <script>
@@ -503,6 +521,37 @@ function ratioLine(row, pal) {
   const ok = m.ratio >= row.need;
   return `<span class="ratio ${ok ? "pass" : "fail"}">${ok ? "✓" : "✗"} ${m.ratio.toFixed(2)}:1 <span class="pair">${toHex(m.fg)} / ${toHex(m.bg)}</span></span>`;
 }
+// The Screenshot column: the element cut out of the audit's screenshot of that theme (CSS crop, no copy of the image).
+// shot.rect is in CSS px, the image in device px (shot.dpr); shot.size is the image's size, written by build-lab.
+const SHOT_MAX_W = 140, SHOT_MAX_H = 90;
+// The crop of a shot as inline style, scaled to fit maxW × maxH (never enlarged): 1:1 when both are Infinity.
+function shotCrop(s, maxW, maxH) {
+  const dpr = s.dpr ?? 1, pad = s.pad ?? 8, [x, y, w, h] = s.rect;
+  const [W, H] = s.size ? [s.size[0] / dpr, s.size[1] / dpr] : [Infinity, Infinity];
+  const x0 = Math.max(0, x - pad), y0 = Math.max(0, y - pad);
+  const cw = Math.min(W, x + w + pad) - x0, ch = Math.min(H, y + h + pad) - y0;
+  const k = Math.min(1, maxW / cw, maxH / ch);
+  const size = s.size ? `${W * k}px ${H * k}px` : "auto";
+  return `width:${cw * k}px;height:${ch * k}px;background-image:url(&quot;${esc(encodeURI(s.file))}&quot;);background-size:${size};background-position:${-x0 * k}px ${-y0 * k}px`;
+}
+const shotName = (s) => String(s.file).split("/").pop().replace(/\.[^.]+$/, "");
+function shotCell(row, theme) {
+  const s = row.shot?.[theme];
+  if (!s) return `<div class="cell"><span class="shot-none">—</span></div>`;
+  return `<div class="cell"><button type="button" class="shot" data-shot="${esc(row.id)}" aria-label="Enlarge screenshot: ${esc(row.label)}, ${esc(shotName(s))}"
+    style="${shotCrop(s, SHOT_MAX_W, SHOT_MAX_H)}"></button>
+    <span class="shot-name">${esc(shotName(s))}</span></div>`;
+}
+// Click on a crop: the same crop 1:1 in a modal dialog (Escape, the close button or the backdrop closes it).
+function openShot(rowId) {
+  const row = ROWS.find((r) => r.id === rowId), s = row?.shot?.[state.theme];
+  if (!s) return;
+  const dlg = document.getElementById("shotDialog");
+  document.getElementById("shotTitle").textContent = row.label;
+  document.getElementById("shotFile").textContent = shotName(s);
+  document.getElementById("shotBody").innerHTML = `<span class="shot-full" role="img" aria-label="${esc(row.label)}" style="${shotCrop(s, Infinity, Infinity)}"></span>`;
+  dlg.showModal();
+}
 // The Current column. A measured row shows the audit's numbers and the control as it is (a focus row: no ring).
 function currentCell(row, pal, theme) {
   const m = measureCurrent(row, pal, theme);
@@ -569,11 +618,11 @@ function renderRows() {
   let html = "", lastGroup = null, lastDecision = null, total = 0, failing = 0, failingNow = 0, open = 0;
   const list = rowsFor(theme);
   for (const row of list) {
-    if (row.group !== lastGroup) { html += `<tr class="group"><td colspan="4">${rowSlot(esc(row.group || ""))}</td></tr>`; lastGroup = row.group; lastDecision = null; }
+    if (row.group !== lastGroup) { html += `<tr class="group"><td colspan="5">${rowSlot(esc(row.group || ""))}</td></tr>`; lastGroup = row.group; lastDecision = null; }
     const d = decisionFor(row, theme);
     if (d && d.id !== lastDecision) {
       const n = list.filter((r) => r.decision === d.id && r.group === row.group).length;
-      html += `<tr class="decision-head" data-decision="${esc(d.id)}"><td colspan="4">${rowSlot(`Decision: <b>${esc(d.title)}</b> · ${n} element${n === 1 ? "" : "s"} · ${decisionState(d, theme)}`)}</td></tr>`;
+      html += `<tr class="decision-head" data-decision="${esc(d.id)}"><td colspan="5">${rowSlot(`Decision: <b>${esc(d.title)}</b> · ${n} element${n === 1 ? "" : "s"} · ${decisionState(d, theme)}`)}</td></tr>`;
     }
     lastDecision = d ? d.id : null;
     const pending = d && !chosenOption(d, theme);
@@ -593,6 +642,7 @@ function renderRows() {
     const classes = [cls, d ? "in-decision" : ""].filter(Boolean).join(" ");
     html += `<tr data-row="${esc(row.id)}"${d ? ` data-decision="${esc(d.id)}"` : ""}${classes ? ` class="${classes}"` : ""}>
       <td class="el">${rowSlot(`<button type="button" class="row-name" aria-pressed="false">${esc(row.label)}</button><small>${esc(row.where || "")}</small>${row.hint ? `<small>${esc(row.hint)}</small>` : ""}${row.src ? `<span class="src">Source: ${esc(row.src)}</span>` : ""}`)}</td>
+      <td>${rowSlot(shotCell(row, theme))}</td>
       <td>${rowSlot(currentCell(row, cur, theme))}</td>
       <td>${rowSlot(`<div class="h-anim"><div class="h-anim-in">${proposalCell(row, theme)}</div></div>`)}</td>
       <td class="need">${rowSlot(row.info ? "WCAG<br>exempt" : `≥ ${Number(row.need).toFixed(1)}`)}</td>
@@ -724,6 +774,8 @@ document.getElementById("rows").addEventListener("click", (e) => {
   if (cp) { const d = decisionById[cp.dataset.copy]; copy(copyText(d, chosenOption(d, state.theme), state.theme)); return; }
   const un = e.target.closest("[data-unchoose]");
   if (un) { const c = state.choices[un.dataset.unchoose]; if (c && typeof c === "object") delete c[state.theme]; else delete state.choices[un.dataset.unchoose]; save(); renderChoice(un.dataset.unchoose); return; }
+  const shot = e.target.closest("[data-shot]");
+  if (shot) { openShot(shot.dataset.shot); return; }
   const tr = e.target.closest("tr[data-row]"); if (!tr) return;
   const sel = window.getSelection();
   if (e.detail && sel.toString() && tr.contains(sel.anchorNode)) return;
@@ -860,6 +912,13 @@ document.getElementById("copyAllBtn").addEventListener("click", () => {
   const label = THEMES.find((t) => t.id === theme)?.label || theme;
   copy(list.map((d) => copyText(d, chosenOption(d, theme), theme)).join("\n\n"),
     `${list.length} choice${list.length === 1 ? "" : "s"} in ${label} copied for the agent`);
+});
+const shotDialog = document.getElementById("shotDialog");
+document.getElementById("shotClose").addEventListener("click", () => shotDialog.close());
+// A click on the backdrop lands on the dialog element itself, outside its box.
+shotDialog.addEventListener("click", (e) => {
+  const r = shotDialog.getBoundingClientRect();
+  if (e.target === shotDialog && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) shotDialog.close();
 });
 document.getElementById("resetBtn").addEventListener("click", () => {
   if (!confirm("Reset your palette edits and decision choices? The agent's data stays.")) return;

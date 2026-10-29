@@ -2,8 +2,8 @@
 // Validates lab.json and bakes it into the lab template, so the page opens from file:// with no fetch.
 // Usage: node build-lab.mjs <lab.json> [out.html]   (out defaults to lab.html next to lab.json)
 // Exit code 1 with a list of problems when the data is inconsistent.
-import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { measure, measureCurrent } from "./lab-math.mjs";
 
@@ -55,6 +55,51 @@ const checkTokenMap = (where, map) => {
 };
 checkTokenMap("proposal", data.proposal);
 
+// shot: { theme: { file, rect: [x, y, w, h], dpr?, pad? } } — the element on the audit's screenshot of that theme.
+// file is relative to lab.html (the page crops it with CSS); rect in CSS px, the image in device px (dpr, default 1).
+// The image's size goes into the page as shot.size, so the crop can stop at its edges.
+const pngSize = (file) => {
+  const b = readFileSync(file);
+  if (b.length < 24 || b.toString("latin1", 1, 4) !== "PNG") return null;
+  return [b.readUInt32BE(16), b.readUInt32BE(20)];
+};
+// The audit names a state's screenshot and its elements file alike: screenshots/07-chat-empty-light.png ↔ elements/07-chat-empty-light.json.
+const viewportOf = (img) => {
+  const f = join(dirname(img), "..", "elements", basename(img).replace(/\.png$/i, ".json"));
+  if (!existsSync(f)) return null;
+  try { return JSON.parse(readFileSync(f, "utf8")).viewport || null; } catch { return null; }
+};
+const missingShots = new Map();
+function checkShot(w, r) {
+  for (const th of themes) {
+    if (r.themes && !r.themes.includes(th)) continue;
+    if (!r.shot?.[th]) missingShots.set(th, [...(missingShots.get(th) || []), r.id]);
+  }
+  for (const [th, s] of Object.entries(r.shot || {})) {
+    const at = `${w}.shot.${th}`;
+    if (!themes.includes(th)) { problems.push(`${at}: unknown theme`); continue; }
+    if (r.themes && !r.themes.includes(th)) problems.push(`${at}: the row is not shown in ${th}`);
+    if (typeof s.file !== "string" || !s.file) { problems.push(`${at}.file: a path relative to lab.html`); continue; }
+    if (!Array.isArray(s.rect) || s.rect.length !== 4 || !s.rect.every((v) => typeof v === "number") || !(s.rect[2] > 0 && s.rect[3] > 0)) {
+      problems.push(`${at}.rect: [x, y, width, height] in CSS px, width and height > 0`); continue;
+    }
+    for (const k of ["dpr", "pad"]) if (s[k] != null && !(typeof s[k] === "number" && s[k] >= (k === "dpr" ? 0.1 : 0))) problems.push(`${at}.${k}: a number`);
+    const img = resolve(dirname(outPath), s.file);
+    if (!existsSync(img)) { problems.push(`${at}.file: ${s.file} not found next to ${basename(outPath)} (${img})`); continue; }
+    const size = pngSize(img);
+    if (!size) { problems.push(`${at}.file: ${s.file} is not a PNG`); continue; }
+    const dpr = s.dpr ?? 1, [x, y, rw, rh] = s.rect;
+    if (x < 0 || y < 0 || (x + rw) * dpr > size[0] + 1 || (y + rh) * dpr > size[1] + 1) {
+      problems.push(`${at}.rect: [${s.rect}] at dpr ${dpr} falls outside ${s.file} (${size[0]}×${size[1]}) — wrong file, dpr or scroll`);
+    }
+    const vp = viewportOf(img);
+    if (vp && (Math.abs(vp[0] * dpr - size[0]) > 1 || Math.abs(vp[1] * dpr - size[1]) > 1)) {
+      problems.push(`${at}: ${s.file} is ${size[0]}×${size[1]}, but its elements file has viewport ${vp[0]}×${vp[1]} at dpr ${dpr} — the screenshot is not of the same view, or dpr is wrong`);
+    }
+    s.size = size;
+  }
+}
+
 const decisionIds = new Set((data.decisions || []).map((d) => d.id));
 const rowIds = new Set();
 for (const r of data.rows || []) {
@@ -71,6 +116,7 @@ for (const r of data.rows || []) {
   checkRef(`${w}.border`, r.border);
   checkRef(`${w}.inner`, r.inner);
   checkRef(`${w}.base`, r.base);
+  checkShot(w, r);
   if (r.noDecision != null && (typeof r.noDecision !== "string" || !r.noDecision.trim())) problems.push(`${w}.noDecision: say why no colour choice fixes it`);
   if (r.noDecision && r.decision) problems.push(`${w}: decision and noDecision together`);
   for (const p of r.parts || []) checkRef(`${w}.parts`, p.fg);
@@ -198,6 +244,8 @@ if (!problems.length) {
     for (const [g, ids] of left) console.warn(`warning: ${th}: «${g}» fails with no decision for this theme — ${ids.join(", ")}`);
   }
 }
+
+for (const [th, ids] of missingShots) console.warn(`warning: ${th}: ${ids.length} row(s) without a screenshot — ${ids.join(", ")}`);
 
 if (problems.length) {
   console.error(`lab.json check failed (${problems.length}):`);
