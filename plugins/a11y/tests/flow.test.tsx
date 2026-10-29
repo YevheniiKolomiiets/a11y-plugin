@@ -20,7 +20,6 @@ const PANE = {
 function engine(on: any) {
   const calls: string[] = []
   on('command.run', (_$: any, e: any) => (calls.push(`run ${e.command}`), { text: '' }))
-  on('turn.complete', () => ({ text: '' }))
   on('ui.open', (_$: any, e: any) => (calls.push(`open ${e.id}`), { value: { isPlaced: true } }))
   on('ui.close', (_$: any, e: any) => (calls.push(`close ${e.id}`), { value: undefined }))
   return calls
@@ -71,86 +70,43 @@ test('other commands mark nothing', async ($, on) => {
   await ui.unmount()
 })
 
-const answer = (text: string, agentId?: string) =>
-  ({ answer: text, durationMs: 1, isAborted: false, turnId: 't', reason: 'answer', agentId }) as any
-
-const button = (ui: any) => ui.find({ type: 'Button', key: 'start' })
-
-test('before anything ran the button starts the audit', async ($, on) => {
-  const calls = engine(on)
+test('the pane shows the steps only: no button on any surface', async ($, on) => {
+  engine(on)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect((await button(ui))?.props.label).toBe('Запустити /a11y:audit')
+    expect(await ui.find({ type: 'Button' })).toBeUndefined()
     await ui.unmount()
   }
+  await $.command.run({ command: 'a11y:audit', args: '' } as any)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'start' })
-  expect(calls).toContain('run a11y:audit')
-  await ui.unmount()
-})
-
-test('while the audit runs there is no button', async ($, on) => {
-  engine(on)
-  await $.command.run({ command: 'a11y:audit', args: '' } as any)
-  await $.turn.complete(answer('Яку тему перевіряти?'))
-  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await button(ui)).toBeUndefined()
-  await ui.unmount()
-})
-
-test('the audit done line brings the lab button; it goes once lab starts', async ($, on) => {
-  const calls = engine(on)
-  await $.command.run({ command: 'a11y:audit', args: '' } as any)
-  await $.turn.complete(answer('Звіт: a11y-audit/README.md\n[a11y:audit] завершено'))
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await button(ui))?.props.label).toBe('Запустити /a11y:lab')
-  await ui.press({ key: 'start' })
-  expect(calls).toContain('run a11y:lab')
-  await ui.unmount()
-
-  await $.command.run({ command: 'a11y:lab', args: '' } as any)
-  await $.command.run({ command: 'a11y:record', args: '' } as any)
-  const after = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await button(after)).toBeUndefined()
-  await after.unmount()
-})
-
-test('the done line counts only from the audit, on the main loop', async ($, on) => {
-  engine(on)
-  await $.command.run({ command: 'a11y:audit', args: '' } as any)
-  await $.turn.complete(answer('[a11y:audit] завершено', 'agent-1'))
-  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await button(ui)).toBeUndefined()
+  expect(await ui.find({ type: 'Button' })).toBeUndefined()
   await ui.unmount()
 })
 
 const skill = (name: string, pluginName?: string) =>
   ({ skill: name, text: '', frontmatter: {}, source: 'plugin', pluginName }) as any
 
-test('a skill expanded without command.run (the desktop app) marks the step and hides the audit button', async ($, on) => {
+const marks = async ($: any) => {
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const found = (await ui.findAll({ type: 'Text', text: /^[▶✓]$/ })).map((t: any) => t.text)
+  await ui.unmount()
+  return found
+}
+
+test('a skill expanded without command.run (the desktop app) marks the step', async ($, on) => {
   engine(on)
   on('skill.prompt', (_$: any, e: any) => ({ text: e.text }))
   await $.skill.prompt(skill('a11y:audit', 'a11y'))
-  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await ui.findAll({ type: 'Text', text: /^[▶✓]$/ })).map((t: any) => t.text)).toEqual(['▶'])
-  expect(await button(ui)).toBeUndefined()
-  await ui.unmount()
-
-  await $.turn.complete(answer('[a11y:audit] завершено'))
-  const after = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await button(after))?.props.label).toBe('Запустити /a11y:lab')
-  await after.unmount()
+  expect(await marks($)).toEqual(['▶'])
+  await $.skill.prompt(skill('a11y:lab', 'a11y'))
+  expect(await marks($)).toEqual(['✓', '▶'])
 })
 
 test('a bare skill name from the a11y plugin counts; another plugin\'s does not', async ($, on) => {
   engine(on)
   on('skill.prompt', (_$: any, e: any) => ({ text: e.text }))
   await $.skill.prompt(skill('audit', 'other'))
-  const before = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await before.find({ type: 'Text', text: /^[▶✓]$/ })).toBeUndefined()
-  await before.unmount()
+  expect(await marks($)).toEqual([])
   await $.skill.prompt(skill('audit', 'a11y'))
-  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await button(ui)).toBeUndefined()
-  await ui.unmount()
+  expect(await marks($)).toEqual(['▶'])
 })

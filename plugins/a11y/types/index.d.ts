@@ -7,8 +7,6 @@ declare module 'claude-code' {
       current: Step | null
       /** Every step started in this session. */
       ran: Step[]
-      /** The audit's last answer carried AUDIT_DONE: what the lab button waits for. */
-      auditDone: boolean
       isOpen: boolean
     }
   }

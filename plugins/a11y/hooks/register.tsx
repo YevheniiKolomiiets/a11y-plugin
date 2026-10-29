@@ -18,17 +18,6 @@ const isStep = (name: string): name is Step => STEPS.some(s => s.step === name)
 const current = atom({ plugin: 'a11y', key: 'current' } as const, null)
 const ran = atom({ plugin: 'a11y', key: 'ran' } as const, [])
 const isOpen = atom({ plugin: 'a11y', key: 'isOpen' } as const, false)
-const auditDone = atom({ plugin: 'a11y', key: 'auditDone' } as const, false)
-
-/** The line /a11y:audit ends its last answer with (skills/audit/SKILL.md, section 6). */
-const AUDIT_DONE = '[a11y:audit] завершено'
-
-/** The one step a button may start now, if any: audit before anything ran, lab once the audit is done and before lab ran. */
-const startable = (done: Step[], isAuditDone: boolean): Step | null => {
-  if (done.length === 0) return 'a11y:audit'
-  if (isAuditDone && !done.includes('a11y:lab')) return 'a11y:lab'
-  return null
-}
 
 /** Marks a step started: it becomes the current one and joins those that ran. */
 async function mark($: Parameters<Hook<'command.run'>>[0], step: Step) {
@@ -53,14 +42,6 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('turn.complete', async ($, e, next) => {
-    const result = await next(e)
-    if (e.agentId === undefined && e.answer.includes(AUDIT_DONE) && (await read($, current)) === 'a11y:audit') {
-      await update($, auditDone, () => true)
-    }
-    return result
-  })
-
   on('command.run', { command: TOGGLE }, async $ => {
     if (await read($, isOpen)) {
       await $.ui.close({ id: PANE })
@@ -79,14 +60,9 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const { Box, Text } = $.ui.resolve(e)
     const now = await read($, current)
     const done = await read($, ran)
-    const next = startable(done, await read($, auditDone))
-    // As if the person typed it: the command.run hook above marks the step.
-    const onStart = async () => {
-      if (next !== null) await $.command.run({ command: next, args: '' })
-    }
     return (
       <Box flexDirection="column">
         {STEPS.map(({ step, help }) => {
@@ -108,11 +84,6 @@ export const register: Register = on => {
             </Box>
           )
         })}
-        {next !== null && Button ? (
-          <Box marginTop={1}>
-            <Button key="start" label={`Запустити /${next}`} onPress={onStart} />
-          </Box>
-        ) : null}
       </Box>
     )
   })
