@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Contrast Lab · example</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  /* The lab's own UI is always light, whatever the OS theme: only the samples show app themes. */
+  :root {
+    color-scheme: light;
+    --ui-bg: #e8ecf0;
+    --ui-bg-end: #eceff2;
+    --ui-panel: #ffffff;
+    --ui-text: #1d1d1b;
+    --ui-muted: #5d5d58;
+    --ui-line: #e2e2dd;
+    --ui-edge: #767670;
+    --ui-edge-soft: #b0b0aa;
+    --ui-pass: #116b3a;
+    --ui-fail: #b3261e;
+    --ui-accent: #1d1d1b;
+    --ui-changed: #f08a24;
+    --ui-changed-text: #a14a00;
+    --ui-canvas: #f4f6f8;
+    --ui-pill: #eef1f4;
+    --ui-mark: #d86541;
+    --ui-shadow: 0 1px 2px rgba(29, 29, 27, 0.05), 0 8px 24px rgba(29, 29, 27, 0.07);
+    --ui-shadow-card: 0 1px 2px rgba(29, 29, 27, 0.04), 0 6px 16px rgba(29, 29, 27, 0.06);
+    --ui-shadow-lift: 0 1px 2px rgba(29, 29, 27, 0.06), 0 8px 16px rgba(29, 29, 27, 0.1);
+    --ui-drop: drop-shadow(0 1px 1px rgba(29, 29, 27, 0.05)) drop-shadow(0 6px 12px rgba(29, 29, 27, 0.06));
+    --ui-drop-lift: drop-shadow(0 1px 2px rgba(29, 29, 27, 0.06)) drop-shadow(0 8px 16px rgba(29, 29, 27, 0.1));
+    --app-font: Inter, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background-color: var(--ui-bg); background-image: linear-gradient(165deg, var(--ui-bg), var(--ui-bg-end)); background-attachment: fixed; color: var(--ui-text); font: 14px/1.45 Inter, system-ui, sans-serif; }
+  :focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+  code, .mono { font-family: "JetBrains Mono", monospace; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 5; background: var(--ui-canvas); border-bottom: 1px solid var(--ui-line);
+    box-shadow: var(--ui-shadow);
+    padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center;
+  }
+  header.top h1 { font-size: 16px; margin: 0; font-weight: 700; }
+  .summary { color: var(--ui-muted); font-size: 13px; }
+  .summary b { color: var(--ui-text); }
+  .summary .all-pass { color: var(--ui-pass); font-weight: 600; }
+  .spacer { flex: 1; }
+  .seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--ui-pill); border: 1px solid var(--ui-line); border-radius: 12px; }
+  .seg button { border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--ui-text); padding: 6px 12px; font: inherit; cursor: pointer;
+    transition: background .15s ease, box-shadow .15s ease, border-color .15s ease; }
+  .seg button:hover:not([aria-pressed="true"]) { background: color-mix(in oklab, var(--ui-panel) 70%, transparent); }
+  .seg button[aria-pressed="true"] { background: var(--ui-panel); border-color: var(--ui-edge); color: var(--ui-text); box-shadow: var(--ui-shadow-card); }
+  .seg button[aria-pressed="true"]:hover { box-shadow: var(--ui-shadow-lift); }
+  .btn { border: 1px solid var(--ui-line); background: var(--ui-panel); color: var(--ui-text); border-radius: 12px; padding: 6px 12px; font: inherit; cursor: pointer;
+    box-shadow: var(--ui-shadow-card); transition: box-shadow .15s ease; }
+  .btn:hover:not(:disabled) { box-shadow: var(--ui-shadow-lift); }
+  .btn:disabled { opacity: .5; cursor: default; box-shadow: none; }
+  .linkbtn { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; color: var(--ui-muted); text-decoration: underline; cursor: pointer; }
+
+  main { display: grid; grid-template-columns: 340px 1fr; gap: 16px; padding: 16px; align-items: start; }
+  /* minmax(0, …): the wide table scrolls inside .scroll instead of stretching the column past the screen */
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .panel { background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 16px; box-shadow: var(--ui-shadow); }
+  /* Both panels stand still under the page header and scroll inside themselves */
+  .palette, .rows { position: sticky; top: calc(var(--top-h, 56px) + 16px); max-height: calc(100vh - var(--top-h, 56px) - 32px); overflow: auto; background: var(--ui-canvas); }
+  @media (max-width: 900px) { .palette, .rows { position: static; max-height: none; } }
+  .palette h2, .rows h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ui-muted); margin: 0; padding: 12px 14px 6px; }
+  /* Panel titles stay in view: Palette inside its own scroll, Elements and the column row under the page header */
+  .pal-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--ui-canvas); border-bottom: 1px solid var(--ui-line); padding: 8px 14px; }
+  .pal-head h2 { padding: 0; }
+  .pal-show { flex: none; padding: 5px 10px; font-size: 12px; }
+  #palette { padding: 2px 12px 16px; }
+  /* Resting track is 1fr. A filter eases unrelated cards to 0fr while they fade, so the ones that stay rise. */
+  .pal-item { display: grid; grid-template-rows: 1fr; }
+  .pal-clip { min-height: 0; }
+  #palette.is-filtering .pal-item { transition: grid-template-rows .32s ease, opacity .28s ease; }
+  #palette.is-filtering .pal-clip, .pal-item.is-dim .pal-clip { overflow: hidden; }
+  .pal-item.is-dim { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
+  #palette h2 { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; color: var(--ui-text); font-size: 14px; font-weight: 600; padding: 12px 2px 8px; }
+  #palette h2::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ui-mark); flex: none; }
+  #palette h2:empty { display: none; }
+  .rows > #rowsTitle { position: sticky; top: 0; z-index: 4; background: var(--ui-canvas); display: flex; align-items: center; border-bottom: 1px solid var(--ui-line); }
+  #showAllElements { margin-left: auto; margin-right: 14px; }
+  .rows-head .info { margin: 6px 0 0 -8px; }
+  .rows .scroll { padding: 2px 12px 16px; }
+  .rows thead th { position: sticky; top: var(--rows-title-h, 0px); z-index: 3; background: var(--ui-canvas);
+    border: 0; border-bottom: 1px solid var(--ui-line); box-shadow: none; padding: 8px 14px 10px; }
+  .tok { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; margin: 0 0 10px; padding: 12px 14px; cursor: pointer;
+        background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 12px; box-shadow: var(--ui-shadow-card);
+        transition: box-shadow .15s ease, transform .15s ease; }
+  .tok:hover { box-shadow: var(--ui-shadow-lift); transform: translateY(-2px); }
+  .tok .name { border: 0; background: none; padding: 0; color: inherit; text-align: left; cursor: pointer; font: 500 13px/1.3 "JetBrains Mono", monospace; }
+  .tok .desc { grid-column: 1 / -1; align-self: start; font-size: 12px; color: var(--ui-muted); }
+  .tok .desc.mono { font-size: 11px; }
+  .tok .vals { display: flex; gap: 8px; align-items: center; }
+  .tok .cur { grid-column: 1 / -1; align-self: start; margin-top: 2px; font: 11px "JetBrains Mono", monospace; color: var(--ui-muted); display: inline-flex; gap: 6px; align-items: center; }
+  .tok .why { font-size: 11px; color: var(--ui-changed-text); }
+  .sw { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--ui-line); display: inline-block;
+        background-image: linear-gradient(var(--c), var(--c)), repeating-conic-gradient(#ccc 0 25%, #fff 0 50%); background-size: auto, 8px 8px; }
+  .tok input[type="text"] { width: 92px; font: 500 12px "JetBrains Mono", monospace; padding: 4px 8px; border: 1px solid var(--ui-edge); border-radius: 999px; background: var(--ui-pill); color: var(--ui-text); text-align: center; }
+  .tok input[type="color"] { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; padding: 0; border: 1px solid var(--ui-edge); border-radius: 6px; background: none; cursor: pointer; }
+  .tok input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  .tok input[type="color"]::-webkit-color-swatch { border: none; border-radius: 5px; }
+  .tok input[type="color"]::-moz-color-swatch { border: none; border-radius: 5px; }
+  .tok.changed { background: color-mix(in oklab, var(--ui-changed) 12%, var(--ui-panel)); }
+  .tok.changed .name::after { content: " • changed"; color: var(--ui-changed-text); font-family: Inter, sans-serif; }
+  .tok.flash { box-shadow: inset 3px 0 0 var(--ui-changed), inset 0 0 0 2px color-mix(in oklab, var(--ui-changed) 60%, transparent), var(--ui-shadow-card); }
+
+  @media (max-width: 900px) { .rows { overflow: visible; } .scroll { overflow-x: auto; } .rows > #rowsTitle, .rows thead th { position: static; } }
+  table { width: 100%; border-collapse: collapse; }
+  /* Gap lives inside each row, so a filtered row can ease its track to 0fr and take the gap with it. */
+  .rows table { border-collapse: separate; border-spacing: 0; }
+  th, td { text-align: left; vertical-align: middle; padding: 10px 12px; border-top: 1px solid var(--ui-line); }
+  th { font-size: 12px; color: var(--ui-muted); font-weight: 500; }
+  .rows tbody td { padding: 0; border: 0; background: transparent; vertical-align: top; line-height: 0; }
+  .row-slot { display: grid; grid-template-rows: 1fr; }
+  .row-clip { min-height: 0; }
+  .row-face { line-height: 1.45; margin-top: 10px; }
+  #rows.is-filtering .row-slot { transition: grid-template-rows .32s ease; }
+  #rows.is-filtering tr { transition: opacity .28s ease, filter .15s ease; }
+  #rows.is-filtering .row-clip, tr.is-dim .row-clip { overflow: hidden; }
+  tr.is-dim .row-slot { grid-template-rows: 0fr; }
+  tr.is-dim { opacity: 0; pointer-events: none; }
+  tr[data-row] { cursor: pointer; filter: var(--ui-drop); transition: filter .15s ease; }
+  /* The row is as tall as its fullest cell. Each face fills that height, so the card stays one piece. */
+  tr[data-row]:not(.is-dim) td { height: 1px; }
+  tr[data-row] .row-slot { height: 100%; }
+  tr[data-row] .row-clip { height: 100%; display: flex; flex-direction: column; }
+  tr[data-row] .row-face { flex: 1 1 auto; min-height: 0; background: var(--ui-panel); border-top: 1px solid var(--ui-line); border-bottom: 1px solid var(--ui-line); padding: 12px 14px; transition: transform .15s ease; }
+  .rows thead th:first-child { border-left: 1px solid transparent; }
+  .rows thead th:last-child { border-right: 1px solid transparent; }
+  tr[data-row] td:first-child .row-face { border-left: 1px solid var(--ui-line); border-radius: 12px 0 0 12px; }
+  tr[data-row] td:last-child .row-face { border-right: 1px solid var(--ui-line); border-radius: 0 12px 12px 0; }
+  tr[data-row]:hover { filter: var(--ui-drop-lift); }
+  tr[data-row]:hover .row-face { transform: translateY(-2px); }
+  tr.pass .row-face { background: color-mix(in oklab, var(--ui-pass) 8%, var(--ui-panel)); }
+  tr.changed-fail .row-face { background: color-mix(in oklab, var(--ui-fail) 8%, var(--ui-panel)); }
+  tr.group .row-face { background: transparent; border: 0; box-shadow: none; font-weight: 600; font-size: 14px; text-transform: none; letter-spacing: 0; color: var(--ui-text); padding: 12px 2px 8px; }
+  tr.group .row-face::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--ui-mark); vertical-align: 1px; }
+  tr.group:has(.row-face:empty) { display: none; }
+  .el .row-name { display: block; width: 100%; border: 0; background: none; padding: 0; font: inherit; font-size: 13px; font-weight: 700; line-height: 1.45; color: inherit; text-align: left; cursor: pointer; }
+  .el small { display: block; color: var(--ui-muted); font-size: 11.5px; }
+  .src { display: inline-block; font-size: 10.5px; color: var(--ui-muted); margin-top: 2px; }
+  .h-anim { display: grid; grid-template-rows: 1fr; }
+  /* Resting size is 1fr (the content). A choice eases the track from the old height to the new one. */
+  .h-anim.is-swap { overflow: hidden; transition: grid-template-rows .32s ease; }
+  .h-anim.is-swap > .h-anim-in { overflow: hidden; min-height: 0; }
+  .stage { border-radius: 8px; padding: 12px; min-height: 52px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(127,127,127,.18); }
+  .ratio { font: 500 12px "JetBrains Mono", monospace; display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .ratio.pass { color: var(--ui-pass); }
+  .ratio.fail { color: var(--ui-fail); }
+  .ratio .pair { color: var(--ui-muted); font-size: 10.5px; }
+  .need { font: 12px "JetBrains Mono", monospace; color: var(--ui-muted); white-space: nowrap; }
+  /* "How to read" popover next to the Elements title: opens on hover and on keyboard focus, Escape closes */
+  .info { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
+  .info-btn { border: 0; background: none; padding: 2px; color: var(--ui-muted); cursor: help; display: inline-flex; border-radius: 6px; }
+  .info-btn:hover { color: var(--ui-text); }
+  .info-btn svg { width: 16px; height: 16px; }
+  .pop { display: none; position: absolute; top: 100%; left: -8px; padding-top: 6px; z-index: 1; }
+  .info:hover .pop, .info:focus-within .pop { display: block; }
+  .info.closed .pop { display: none; }
+  .pop-box { display: block; width: min(460px, 80vw); padding: 12px 14px; background: var(--ui-panel); border-radius: 10px;
+    box-shadow: 0 6px 16px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.08);
+    font-size: 13px; font-weight: 400; line-height: 1.5; letter-spacing: normal; text-transform: none; color: var(--ui-muted); }
+  .pop-box b { color: var(--ui-text); }
+
+  /* decision options */
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+  /* No border: the card lifts towards the viewer on hover */
+  .option { text-align: left; border: 1px solid var(--ui-line); border-radius: 12px; padding: 8px; background: var(--ui-canvas); cursor: pointer; display: flex; flex-direction: column; gap: 6px; font: inherit; color: inherit;
+    transition: box-shadow .15s ease, transform .15s ease; }
+  .option:hover { border-color: var(--ui-edge); box-shadow: var(--ui-shadow-card); transform: translateY(-2px); }
+  /* The same option in the decision's other rows: a lighter outline, no motion, so focus stays on the hovered card */
+  .option.sync:not(:hover) { border-color: var(--ui-edge-soft); }
+  @media (prefers-reduced-motion: reduce) {
+    .option, tr[data-row], tr[data-row] .row-face, .btn, .seg button, .tok, .h-anim.is-swap, #palette.is-filtering .pal-item, #rows.is-filtering .row-slot, #rows.is-filtering tr { transition: none; }
+    .option:hover, tr[data-row]:hover .row-face, .tok:hover { transform: none; }
+    tr.flash-row .row-face { animation: none; }
+  }
+  .option .olabel { font-size: 12px; font-weight: 600; }
+  .option .onote { font-size: 11px; color: var(--ui-muted); }
+  .chosen { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--ui-muted); }
+  .chosen b { color: var(--ui-text); }
+  .copy { border: 1px solid var(--ui-line); background: var(--ui-panel); border-radius: 6px; width: 24px; height: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--ui-muted); }
+  .copy:hover { color: var(--ui-text); border-color: var(--ui-muted); }
+  .copy svg { width: 14px; height: 14px; }
+  /* decision block: the caption ties together the rows one choice changes */
+  tr.decision-head .row-face { background: transparent; border: 0; box-shadow: none; font-size: 12px; color: var(--ui-muted); padding: 4px 2px 0; }
+  tr.decision-head .row-face b { color: var(--ui-text); }
+  tr.flash-row .row-face { animation: flashrow 1.4s ease-out; }
+  @keyframes flashrow { from { background: color-mix(in oklab, var(--ui-changed) 30%, transparent); } }
+  .toast { position: fixed; bottom: 16px; right: 16px; z-index: 10; background: var(--ui-pass); color: #ffffff; padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+
+  /* samples: drawn in the app's font */
+  .s { font-family: var(--app-font); }
+  .s-btn { border-radius: 10px; padding: 8px 14px; border: 1px solid transparent; }
+  .s-up { text-transform: uppercase; }
+  .s-chip { padding: 1px 6px; border-radius: 999px; border: 1px solid; }
+  .s-badge { padding: 2px 8px; border-radius: 999px; border: 1px solid; }
+  .s-sev { padding: 2px 6px; border-radius: 4px; border: 1px solid transparent; }
+  .s-pill { padding: 1px 6px; border-radius: 999px; }
+  .s-plate { padding: 4px 10px; border-radius: 999px; border: 1px solid; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+  .s-avatar { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+  .s-icon svg { width: 18px; height: 18px; display: block; }
+  .s-input { padding: 7px 10px; border-radius: 8px; border: 1px solid; min-width: 120px; }
+  .s-stack { display: flex; flex-direction: column; gap: 4px; }
+  .s-logo { display: flex; flex-direction: column; line-height: .95; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1 id="labTitle"></h1>
+  <div class="seg" role="group" aria-label="App theme" id="themeSeg"></div>
+  <span class="summary" id="summary" aria-live="polite"></span>
+  <span class="spacer"></span>
+  <button type="button" class="btn" id="copyAllBtn">Copy all choices</button>
+  <button type="button" class="btn" id="resetBtn">Reset my edits</button>
+</header>
+<main>
+  <aside class="panel palette" aria-labelledby="palTitle">
+    <div class="pal-head">
+      <h2 id="palTitle">Palette</h2>
+      <button type="button" class="btn pal-show" id="showAllTokens" hidden>Show all tokens</button>
+    </div>
+    <div id="palette"></div>
+  </aside>
+  <section class="panel rows" aria-labelledby="rowsTitleText">
+    <div class="rows-head" id="rowsTitle"><h2 id="rowsTitleText">Elements</h2><span class="info">
+      <button type="button" class="info-btn" aria-label="How to read" aria-describedby="howTo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>
+      <span class="pop" id="howTo" role="tooltip"><span class="pop-box"><b>How to read.</b> “Current implementation” shows the colours from the code. “Proposal” uses the palette on the left: agreed values, chosen decision options and your own edits (saved in this browser only). Threshold is 4.5 for text and 3.0 for large text, icons and boundaries. Translucent layers and <code>opacity</code> are blended onto the background before the ratio is computed. Green row: the proposal passes. Reddish: changed but still failing. Plain: unchanged and failing. Click a row, or focus its name and press Enter, to see only its tokens in the palette. Show all tokens brings the rest back. Click a token, or focus its name and press Enter, to see only the elements that use it. Show all elements brings the rest back. In an open decision, click an option to choose it for the theme you are looking at and copy the choice for the agent; other themes stay open.</span></span>
+    </span>
+    <button type="button" class="btn pal-show" id="showAllElements" hidden>Show all elements</button>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th scope="col">Element</th><th scope="col">Current implementation</th><th scope="col">Proposal</th><th scope="col">Threshold</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script id="lab-data" type="application/json">{"version":1,"meta":{"id":"example","title":"Contrast Lab · example","project":"Example","font":{"stack":"\"Inter\", system-ui, sans-serif","css":[]}},"themes":[{"id":"light","label":"Light"},{"id":"dark","label":"Dark"}],"tokens":[{"name":"background","group":"Surfaces","desc":"Page background","source":"src/app/globals.css:22","values":{"light":"#f4f6f8","dark":"#1a1412"}},{"name":"card","group":"Surfaces","desc":"Cards and dialogs","source":"src/app/globals.css:25","values":{"light":"#ffffff","dark":"#26201d"}},{"name":"primary","group":"Brand","desc":"Logo colour: button fill (do not change)","source":"src/app/globals.css:34","values":{"light":"#e96d46","dark":"#f0845f"}},{"name":"primary-foreground","group":"Brand","desc":"Text on the primary fill","source":"src/app/globals.css:35","values":{"light":"#ffffff","dark":"#2a1610"}},{"name":"primary-text","group":"Brand","desc":"New: primary as a text colour. Today = primary","values":{"light":"#e96d46","dark":"#f0845f"}},{"name":"sev-high","group":"Hardcoded → new token","desc":"HIGH: text-rose-600 in lib/severity.ts","source":"src/lib/severity.ts:14","values":{"light":"#ec003f","dark":"#ec003f"}},{"name":"sev-high-bg","group":"Hardcoded → new token","desc":"HIGH badge background: bg-rose-500/10","source":"src/lib/severity.ts:15","values":{"light":"#ff20561a","dark":"#ff20561a"}}],"proposal":{"light":{"primary-foreground":"#2a1610","primary-text":"#b94117"},"dark":{}},"rows":[{"id":"btn-primary","group":"Brand","label":"Primary button","where":"ui/Button.tsx:5","src":"audit","routes":["/login"],"need":4.5,"kind":"btn","text":"Sign In","fg":"primary-foreground","bg":["primary"],"stage":["card"]},{"id":"btn-primary-disabled","group":"Brand","label":"Primary button: disabled","where":"ui/Button.tsx:44, disabled:opacity-50","src":"audit","need":4.5,"info":true,"opacity":0.5,"base":"card","kind":"btn","text":"Sign In","fg":"primary-foreground","bg":["primary"],"stage":["card"]},{"id":"eyebrow","group":"Brand","label":"Eyebrow on the page background","where":"(home)/page.tsx:88","src":"audit","routes":["/"],"need":4.5,"kind":"eyebrow","text":"Browse by impact","fg":"primary-text","bg":["background"]},{"id":"sev-high","group":"Severity","label":"HIGH badge","where":"ImpactGroupList.tsx:273, 9px","src":"ticket 796","routes":["/bills/[id]"],"need":4.5,"kind":"sev","text":"High","fg":"sev-high","bg":["card","sev-high-bg"],"decision":"severity"},{"id":"sev-high-icon","group":"Severity","label":"Evidence icon: Mandates","where":"ImpactEvidenceLinks.tsx:26","src":"ticket 796","need":3,"kind":"icon","icon":"shield","fg":"sev-high","bg":["card"],"decision":"severity"}],"decisions":[{"id":"severity","title":"Severity HIGH","status":"open","chosen":null,"options":[{"id":"A","label":"One step darker / lighter (700 / 400), solid 50 / 950 background","tokens":{"light":{"sev-high":"#c70036","sev-high-bg":"#fff1f2"},"dark":{"sev-high":"#ff637e","sev-high-bg":"#4d0218"}}},{"id":"B","label":"One more step of contrast (800 / 300)","note":"Pastel in dark theme; levels are harder to tell apart","tokens":{"light":{"sev-high":"#a50036","sev-high-bg":"#fff1f2"},"dark":{"sev-high":"#ffa1ad","sev-high-bg":"#4d0218"}}}]}],"icons":{"shield":"<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"/><\/svg>"}}</script>
+<script>
+const DATA = JSON.parse(document.getElementById("lab-data").textContent);
+const THEMES = DATA.themes;
+const TOKENS = DATA.tokens;
+const ROWS = DATA.rows;
+const DECISIONS = DATA.decisions || [];
+const ICONS = DATA.icons || {};
+const ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+const ICON_LINK = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>';
+const ICON_DEFAULT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg>';
+if (DATA.meta?.font?.stack) document.documentElement.style.setProperty("--app-font", DATA.meta.font.stack);
+document.title = DATA.meta?.title || "Contrast Lab";
+document.getElementById("labTitle").textContent = DATA.meta?.title || "Contrast Lab";
+
+// ── Color math ──
+function parseHex(h) {
+  h = String(h).trim().replace(/^#/, "");
+  if (h.length === 3 || h.length === 4) h = h.split("").map((c) => c + c).join("");
+  if (!/^[0-9a-f]{6}([0-9a-f]{2})?$/i.test(h)) return null;
+  const n = (i) => parseInt(h.slice(i, i + 2), 16);
+  return [n(0), n(2), n(4), h.length === 8 ? n(6) / 255 : 1];
+}
+const toHex = ([r, g, b]) => "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+const over = (top, base) => [0, 1, 2].map((i) => top[i] * top[3] + base[i] * (1 - top[3])).concat(1);
+function lum([r, g, b]) {
+  const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+const contrast = (a, b) => { const l1 = lum(a), l2 = lum(b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); };
+function resolve(spec, pal) {
+  const [name, alpha] = String(spec).split("@");
+  const raw = name.startsWith("#") ? name : pal[name];
+  const c = parseHex(raw || "#ff00ff") || [255, 0, 255, 1];
+  return [c[0], c[1], c[2], c[3] * (alpha ? parseFloat(alpha) : 1)];
+}
+function flatten(layers, pal) {
+  let acc = resolve(layers[0], pal);
+  acc = [acc[0], acc[1], acc[2], 1];
+  for (const l of layers.slice(1)) acc = over(resolve(l, pal), acc);
+  return acc;
+}
+function measure(row, pal) {
+  let bg = flatten(row.bg, pal);
+  let fg = over(resolve(row.fg, pal), bg);
+  if (row.opacity != null) {
+    const base = flatten([row.base || row.bg[0]], pal);
+    bg = over([bg[0], bg[1], bg[2], row.opacity], base);
+    fg = over([fg[0], fg[1], fg[2], row.opacity], base);
+  }
+  return { bg, fg, ratio: contrast(fg, bg) };
+}
+
+// ── State ──
+const current = {};
+for (const t of THEMES) current[t.id] = Object.fromEntries(TOKENS.map((k) => [k.name, String(k.values[t.id]).toLowerCase()]));
+const decisionById = Object.fromEntries(DECISIONS.map((d) => [d.id, d]));
+const hash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+// New agent data (proposal, options, token values) resets saved browser edits, so they never hide it.
+const STORE = `a11y-lab:${DATA.meta?.id || "lab"}:${hash(JSON.stringify([DATA.proposal, DECISIONS, TOKENS]))}`;
+let state = { theme: THEMES[0].id, edits: {}, choices: {} };
+try { const s = JSON.parse(localStorage.getItem(STORE) || "null"); if (s) state = { ...state, ...s }; } catch (e) { /* no storage */ }
+if (!THEMES.some((t) => t.id === state.theme)) state.theme = THEMES[0].id;
+const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* ignore */ } };
+
+// Choices are per theme. In lab.json `chosen` is { theme: optionId } for recorded themes; a plain string
+// (older data) means every theme. The viewer's own picks live in state.choices[decision][theme].
+const recordedId = (d, theme) => (typeof d.chosen === "string" ? d.chosen : d.chosen?.[theme]) || null;
+const isRecorded = (d, theme) => !!recordedId(d, theme);
+const chosenOption = (d, theme) => {
+  const mine = state.choices[d.id];
+  const id = recordedId(d, theme) || (mine && typeof mine === "object" ? mine[theme] : null);
+  return id ? d.options.find((o) => o.id === id) : null;
+};
+// Palette for the proposal column. `skip` leaves one decision out (to preview its options).
+function proposed(theme, skip) {
+  const pal = { ...current[theme], ...(DATA.proposal?.[theme] || {}) };
+  for (const d of DECISIONS) {
+    if (d.id === skip) continue;
+    const o = chosenOption(d, theme);
+    if (o) Object.assign(pal, o.tokens?.[theme] || {});
+  }
+  const edits = state.edits[theme] || {};
+  for (const [k, v] of Object.entries(edits)) {
+    if (skip && decisionTokens(decisionById[skip]).has(k)) continue;
+    pal[k] = v;
+  }
+  return pal;
+}
+function decisionTokens(d) {
+  const s = new Set();
+  for (const o of d?.options || []) for (const t of THEMES) for (const k of Object.keys(o.tokens?.[t.id] || {})) s.add(k);
+  return s;
+}
+function optionPalette(theme, d, o) {
+  return { ...proposed(theme, d.id), ...(o.tokens?.[theme] || {}) };
+}
+function isEdited(d, o, theme) {
+  const e = state.edits[theme] || {};
+  for (const [k, v] of Object.entries(o.tokens?.[theme] || {})) if (e[k] && e[k].toLowerCase() !== String(v).toLowerCase()) return true;
+  for (const k of decisionTokens(d)) if (e[k] && !(k in (o.tokens?.[theme] || {}))) return true;
+  return false;
+}
+// Choices made in this theme and not recorded yet: what the agent still has to record.
+// A decision may cover only some themes (`themes`); elsewhere its rows are plain rows.
+const appliesTo = (d, theme) => !!d && (!d.themes || d.themes.includes(theme));
+const decisionFor = (row, theme) => { const d = row.decision && decisionById[row.decision]; return appliesTo(d, theme) ? d : null; };
+const pendingChoices = (theme) => DECISIONS.filter((d) => appliesTo(d, theme) && !isRecorded(d, theme) && chosenOption(d, theme));
+// One theme per copy: the user decides for the theme they are looking at, the others stay open.
+function copyText(d, o, theme) {
+  const lines = [`[a11y:lab] decision=${d.id} theme=${theme} option=${o.id}${isEdited(d, o, theme) ? " (edited)" : ""}`];
+  const pal = proposed(theme);
+  const parts = [...decisionTokens(d)].filter((k) => k in pal).map((k) => `--${k} ${pal[k]}`);
+  if (parts.length) lines.push(`${theme}: ${parts.join(", ")}`);
+  return lines.join("\n");
+}
+async function copy(text, message = "Copied for the agent") {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); ta.remove();
+  }
+  const t = document.getElementById("toast"); t.textContent = message; t.classList.add("show");
+  clearTimeout(t.hideTimer);
+  t.hideTimer = setTimeout(() => t.classList.remove("show"), 5000);
+}
+
+// ── Samples ──
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const FONT = {
+  text: [500, 12], tiny: [400, 9], eyebrow: [700, 11], display: [400, 40], link: [600, 13], "link-icon": [400, 12],
+  btn: [600, 13], edge: [600, 13], chip: [500, 10], badge: [600, 12], sev: [900, 9], pill: [700, 10], plate: [700, 8],
+  logo: [400, 26], avatar: [900, 9], icon: [400, 12], input: [400, 13], field: [400, 13], footer: [400, 10], "in-row": [900, 9], stack: [600, 10],
+};
+// `proposal` is true in the Proposal column: parts with proposalWeight show the weight being proposed.
+function sample(row, pal, proposal = true) {
+  const { bg, fg } = measure(row, pal);
+  const bgHex = toHex(bg), fgHex = toHex(fg);
+  const stageHex = toHex(flatten(row.stage || [row.bg[0]], pal));
+  const border = row.border ? toHex(over(resolve(row.border, pal), bg)) : fgHex;
+  const [dw, ds] = FONT[row.kind] || FONT.text;
+  const font = `font:${row.weight ?? dw} ${row.size ?? ds}px var(--app-font);`;
+  const t = esc(row.text || "");
+  const st = (inner, bgc = stageHex) => `<div class="stage" style="background:${bgc}">${inner}</div>`;
+  switch (row.kind) {
+    case "btn": return st(`<span class="s s-btn" style="${font}background:${bgHex};color:${fgHex};${row.border ? `border-color:${border}` : ""}">${t}</span>`);
+    case "edge": {
+      const inner = row.inner ? toHex(resolve(row.inner, pal)) : "#ffffff";
+      return st(`<span class="s s-btn" style="${font}background:${fgHex};color:${inner}">${t}</span>`, bgHex);
+    }
+    case "chip": return st(`<span class="s s-chip s-up" style="${font}letter-spacing:.04em;background:${bgHex};color:${fgHex};border-color:${border}">${t}</span>`);
+    case "badge": return st(`<span class="s s-badge" style="${font}background:${bgHex};color:${fgHex};border-color:${border}">${t}</span>`);
+    case "sev": return st(`<span class="s s-sev s-up" style="${font}letter-spacing:.08em;background:${bgHex};color:${fgHex}">${t}</span>`);
+    case "in-row": return st(`<span class="s s-sev s-up" style="${font}letter-spacing:.08em;background:${bgHex};color:${fgHex};border-color:${border}">${t}</span>`);
+    case "pill": return st(`<span class="s s-pill" style="${font}background:${bgHex};color:${fgHex}">${t}</span>`);
+    case "plate": return st(`<span class="s s-plate s-up" style="${font}letter-spacing:.08em;background:${bgHex};color:${fgHex};border-color:${border}">${t}</span>`, bgHex);
+    case "avatar": return st(`<span class="s s-avatar" style="${font}background:${bgHex};color:${fgHex}">${t}</span>`);
+    case "icon": return st(`<span class="s-icon" style="color:${fgHex}">${ICONS[row.icon] || ICON_DEFAULT}</span>`, row.stage ? stageHex : bgHex);
+    case "input": return st(`<span class="s s-input" style="${font}background:${bgHex};color:${fgHex};border-color:${row.border ? border : toHex(over([fg[0], fg[1], fg[2], 0.3], bg))}">${t}</span>`);
+    case "field": {
+      const inner = row.inner ? toHex(over(resolve(row.inner, pal), bg)) : toHex(over([fg[0], fg[1], fg[2], 0.6], bg));
+      return st(`<span class="s s-input" style="${font}background:${bgHex};color:${inner};border-color:${fgHex}">${t}</span>`, bgHex);
+    }
+    case "eyebrow": return st(`<span class="s s-up" style="${font}letter-spacing:.12em;color:${fgHex}">${t}</span>`, bgHex);
+    case "link-icon": return st(`<span class="s" style="${font}color:${fgHex};display:inline-flex;align-items:center;gap:3px">${ICON_LINK} ${t}</span>`, bgHex);
+    case "logo": {
+      const family = row.fontFamily ? esc(row.fontFamily) : "var(--app-font)";
+      const parts = (row.parts || [{ text: row.text, fg: row.fg }]).map((p) =>
+        `<span style="color:${toHex(over(resolve(p.fg, pal), bg))}">${esc(p.text)}</span>`).join("");
+      return st(`<span class="s-logo" style="font:${row.italic ? "italic " : ""}${row.weight ?? dw} ${row.size ?? ds}px ${family}">${parts}</span>`, bgHex);
+    }
+    case "stack": {
+      const parts = (row.parts || []).map((p) => `<span class="s" style="font:${(proposal && p.proposalWeight) || p.weight || dw} ${row.size ?? ds}px var(--app-font);color:${toHex(over(resolve(p.fg, pal), bg))}">${esc(p.text)}</span>`).join("");
+      return st(`<span class="s-stack">${parts}</span>`, bgHex);
+    }
+    default: return st(`<span class="s" style="${font}color:${fgHex}">${t}</span>`, bgHex);
+  }
+}
+function ratioLine(row, pal) {
+  const m = measure(row, pal);
+  if (row.info) return `<span class="ratio">${m.ratio.toFixed(2)}:1 <span class="pair">${toHex(m.fg)} / ${toHex(m.bg)}</span></span>`;
+  const ok = m.ratio >= row.need;
+  return `<span class="ratio ${ok ? "pass" : "fail"}">${ok ? "✓" : "✗"} ${m.ratio.toFixed(2)}:1 <span class="pair">${toHex(m.fg)} / ${toHex(m.bg)}</span></span>`;
+}
+
+// ── Rendering ──
+// Rows of one decision are kept together (at the first one's place in its group), so the block reads as one.
+function rowsFor(theme) {
+  const visible = ROWS.filter((r) => !r.themes || r.themes.includes(theme));
+  const out = [], placed = new Set();
+  for (const r of visible) {
+    if (placed.has(r)) continue;
+    if (!r.decision) { out.push(r); placed.add(r); continue; }
+    for (const x of visible) if (x.decision === r.decision && x.group === r.group && !placed.has(x)) { out.push(x); placed.add(x); }
+  }
+  return out;
+}
+function decisionState(d, theme) {
+  const o = chosenOption(d, theme);
+  if (!o) return "pick an option for this theme — one choice applies to all of them";
+  if (isRecorded(d, theme)) return "✓ recorded";
+  return isEdited(d, o, theme) ? "edited manually" : `chosen <b>${esc(o.id)}</b>`;
+}
+function proposalCell(row, theme) {
+  const d = decisionFor(row, theme);
+  if (d) {
+    const o = chosenOption(d, theme);
+    if (!o) {
+      const cards = d.options.map((opt) => {
+        const pal = optionPalette(theme, d, opt);
+        return `<button type="button" class="option" data-choose="${esc(d.id)}" data-option="${esc(opt.id)}" aria-label="Choose option ${esc(opt.id)}: ${esc(opt.label)}">
+          <span class="olabel">${esc(opt.id)} · ${esc(opt.label)}</span>
+          ${sample(row, pal)}${ratioLine(row, pal)}
+          ${opt.note ? `<span class="onote">${esc(opt.note)}</span>` : ""}
+        </button>`;
+      }).join("");
+      return `<div class="cell"><div class="options">${cards}</div></div>`;
+    }
+    const pal = proposed(theme);
+    const recorded = isRecorded(d, theme);
+    // Once the user changes the colours they are no longer the agent's option, so its letter is not shown.
+    const recordedLabel = o.manual ? "<b>Edited manually</b>" : `<b>${esc(o.id)} · ${esc(o.label)}</b>`;
+    const meta = recorded
+      ? `<span class="chosen">✓ recorded: ${recordedLabel}</span>`
+      : `<span class="chosen">${isEdited(d, o, theme) ? "<b>Edited manually</b>" : `Chosen <b>${esc(o.id)}</b>`}
+          <button type="button" class="copy" data-copy="${esc(d.id)}" title="Copy choice for the agent" aria-label="Copy choice for the agent">${ICON_COPY}</button>
+          <button type="button" class="linkbtn" data-unchoose="${esc(d.id)}">change choice</button></span>`;
+    return `<div class="cell">${sample(row, pal)}${ratioLine(row, pal)}${meta}</div>`;
+  }
+  const pal = proposed(theme);
+  return `<div class="cell">${sample(row, pal)}${ratioLine(row, pal)}</div>`;
+}
+const rowSlot = (inner) => `<div class="row-slot"><div class="row-clip"><div class="row-face">${inner}</div></div></div>`;
+function renderRows() {
+  const theme = state.theme, cur = current[theme], prop = proposed(theme);
+  let html = "", lastGroup = null, lastDecision = null, total = 0, failing = 0, open = 0;
+  const list = rowsFor(theme);
+  for (const row of list) {
+    if (row.group !== lastGroup) { html += `<tr class="group"><td colspan="4">${rowSlot(esc(row.group || ""))}</td></tr>`; lastGroup = row.group; lastDecision = null; }
+    const d = decisionFor(row, theme);
+    if (d && d.id !== lastDecision) {
+      const n = list.filter((r) => r.decision === d.id && r.group === row.group).length;
+      html += `<tr class="decision-head" data-decision="${esc(d.id)}"><td colspan="4">${rowSlot(`Decision: <b>${esc(d.title)}</b> · ${n} element${n === 1 ? "" : "s"} · ${decisionState(d, theme)}`)}</td></tr>`;
+    }
+    lastDecision = d ? d.id : null;
+    const pending = d && !chosenOption(d, theme);
+    const mc = measure(row, cur), mp = measure(row, prop);
+    if (!row.info) {
+      total++;
+      // Proposal palette: code colours + the viewer's choices and edits; a row awaiting a choice keeps the code colour.
+      if (mp.ratio < row.need) failing++;
+    }
+    const changed = toHex(mc.fg) !== toHex(mp.fg) || toHex(mc.bg) !== toHex(mp.bg);
+    const fails = !row.info && mp.ratio < row.need;
+    // Green: the proposal passes. Red: changed but still failing. Plain: untouched and failing, or awaiting a choice.
+    const cls = pending ? "" : changed ? (fails ? "changed-fail" : "pass") : !row.info && !fails ? "pass" : "";
+    const classes = [cls, d ? "in-decision" : ""].filter(Boolean).join(" ");
+    html += `<tr data-row="${esc(row.id)}"${d ? ` data-decision="${esc(d.id)}"` : ""}${classes ? ` class="${classes}"` : ""}>
+      <td class="el">${rowSlot(`<button type="button" class="row-name" aria-pressed="false">${esc(row.label)}</button><small>${esc(row.where || "")}</small>${row.hint ? `<small>${esc(row.hint)}</small>` : ""}${row.src ? `<span class="src">Source: ${esc(row.src)}</span>` : ""}`)}</td>
+      <td>${rowSlot(`<div class="cell">${sample(row, cur, false)}${ratioLine(row, cur)}</div>`)}</td>
+      <td>${rowSlot(`<div class="h-anim"><div class="h-anim-in">${proposalCell(row, theme)}</div></div>`)}</td>
+      <td class="need">${rowSlot(row.info ? "WCAG<br>exempt" : `≥ ${Number(row.need).toFixed(1)}`)}</td>
+    </tr>`;
+  }
+  for (const d of DECISIONS) if (appliesTo(d, theme) && !chosenOption(d, theme)) open++;
+  document.getElementById("rows").innerHTML = html;
+  const label = THEMES.find((t) => t.id === theme)?.label || theme;
+  document.getElementById("summary").innerHTML = !failing && !open
+    ? `<span class="all-pass">✓ ${esc(label)}: all ${total} elements pass</span>`
+    : `${esc(label)}: still failing <b>${failing}</b> of ${total} · <b>${open}</b> decision${open === 1 ? "" : "s"} left`;
+  const n = pendingChoices(theme).length, all = document.getElementById("copyAllBtn");
+  all.textContent = n ? `Copy all choices (${n})` : "Copy all choices";
+  all.disabled = !n;
+  all.title = n ? `Copy every choice made in ${label} that is not recorded yet` : `No choices in ${label} to copy yet`;
+  syncRowsFilter(false);
+}
+// Where a token is declared: one place for every theme, or { theme: "file:line" }.
+const sourceOf = (t, theme) => (t.source && typeof t.source === "object" ? t.source[theme] : t.source) || "";
+function renderPalette() {
+  const theme = state.theme, prop = proposed(theme);
+  let html = "", last = null;
+  for (const t of TOKENS) {
+    if (t.group !== last) {
+      html += `<div class="pal-item" data-group="${esc(t.group || "")}"><div class="pal-clip"><h2>${esc(t.group || "")}</h2></div></div>`;
+      last = t.group;
+    }
+    const cur = current[theme][t.name], val = String(prop[t.name]);
+    const rgb = toHex(parseHex(val) || [0, 0, 0]);
+    html += `<div class="pal-item" data-pal="${esc(t.name)}" data-group="${esc(t.group || "")}"><div class="pal-clip"><div class="tok${cur !== val.toLowerCase() ? " changed" : ""}" data-tok="${esc(t.name)}">
+      <button type="button" class="name" aria-pressed="false">--${esc(t.name)}</button>
+      <span class="vals"><input type="color" value="${rgb}" aria-label="Colour --${esc(t.name)}"><input type="text" value="${esc(val)}" spellcheck="false" aria-label="Hex --${esc(t.name)}"></span>
+      ${t.desc ? `<span class="desc">${esc(t.desc)}</span>` : ""}
+      ${sourceOf(t, theme) ? `<span class="desc mono">${esc(sourceOf(t, theme))}</span>` : ""}
+      <span class="cur">current <span class="sw" style="--c:${esc(cur)}"></span>${esc(cur)}</span>
+    </div></div></div>`;
+  }
+  document.getElementById("palette").innerHTML = html;
+  syncPaletteFilter(false);
+}
+function renderThemes() {
+  document.getElementById("themeSeg").innerHTML = THEMES.map((t) =>
+    `<button type="button" data-theme-btn="${esc(t.id)}" aria-pressed="${t.id === state.theme}">${esc(t.label)}</button>`).join("");
+}
+const render = () => { renderThemes(); renderPalette(); renderRows(); };
+// Proposal choices change a row's height. Keep the previous contents in a 1fr track and
+// ease it to 0fr while the new contents open from 0fr to 1fr, so the row does not jump.
+function decisionRowIds(id) {
+  return [...document.querySelectorAll(`tr[data-row][data-decision="${CSS.escape(id)}"]`)].map((tr) => tr.dataset.row);
+}
+function renderChoice(id) {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const from = new Map();
+  if (!reduce) {
+    for (const rowId of decisionRowIds(id)) {
+      const anim = document.querySelector(`tr[data-row="${CSS.escape(rowId)}"] .h-anim`);
+      if (anim) from.set(rowId, anim.getBoundingClientRect().height);
+    }
+  }
+  render();
+  for (const [rowId, start] of from) {
+    const anim = document.querySelector(`tr[data-row="${CSS.escape(rowId)}"] .h-anim`);
+    if (!anim) continue;
+    const end = anim.getBoundingClientRect().height;
+    if (Math.abs(end - start) < 1) continue;
+    anim.classList.add("is-swap");
+    anim.style.transition = "none";
+    anim.style.gridTemplateRows = `${start}px`;
+    anim.offsetHeight;
+    anim.style.removeProperty("transition");
+    anim.offsetHeight;
+    anim.style.gridTemplateRows = `${end}px`;
+    let done = false;
+    const finish = () => {
+      if (done || !anim.isConnected) return;
+      done = true;
+      anim.style.removeProperty("grid-template-rows");
+      anim.classList.remove("is-swap");
+    };
+    anim.addEventListener("transitionend", (ev) => {
+      if (ev.target === anim && ev.propertyName === "grid-template-rows") finish();
+    });
+    setTimeout(finish, 450);
+  }
+}
+
+// ── Events ──
+document.getElementById("themeSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-theme-btn]"); if (!b) return;
+  state.theme = b.dataset.themeBtn; save(); render();
+});
+document.getElementById("palette").addEventListener("click", (e) => {
+  const tok = e.target.closest(".tok[data-tok]"); if (!tok) return;
+  // A mouse drag that selects text is not a click. Keyboard activation (detail 0) always counts:
+  // the hex field this card just put focus in may still hold a selection.
+  const sel = window.getSelection();
+  if (e.detail && sel && sel.toString() && tok.contains(sel.anchorNode)) return;
+  focusElements(tok.dataset.tok);
+});
+document.getElementById("palette").addEventListener("input", (e) => {
+  const tok = e.target.closest("[data-tok]"); if (!tok) return;
+  const name = tok.dataset.tok, text = tok.querySelector('input[type="text"]');
+  let v = e.target.value.trim();
+  if (e.target.type === "color") {
+    const prev = parseHex(proposed(state.theme)[name]);
+    v += prev && prev[3] < 1 ? Math.round(prev[3] * 255).toString(16).padStart(2, "0") : "";
+    text.value = v;
+  }
+  if (!parseHex(v)) return;
+  v = (v.startsWith("#") ? v : "#" + v).toLowerCase();
+  (state.edits[state.theme] ||= {})[name] = v;
+  if (e.target.type !== "color") tok.querySelector('input[type="color"]').value = toHex(parseHex(v));
+  tok.classList.toggle("changed", current[state.theme][name] !== v);
+  save(); renderRows();
+});
+document.getElementById("rows").addEventListener("click", (e) => {
+  const choose = e.target.closest("[data-choose]");
+  if (choose) {
+    const d = decisionById[choose.dataset.choose], o = d.options.find((x) => x.id === choose.dataset.option);
+    state.choices[d.id] = { ...(typeof state.choices[d.id] === "object" ? state.choices[d.id] : {}), [state.theme]: o.id }; save(); renderChoice(d.id);
+    const rows = [...document.querySelectorAll(`tr[data-decision="${CSS.escape(d.id)}"]`)];
+    rows.forEach((r) => r.classList.add("flash-row"));
+    const n = rows.filter((r) => r.matches("[data-row]")).length;
+    const label = THEMES.find((t) => t.id === state.theme)?.label || state.theme;
+    copy(copyText(d, o, state.theme), `Option ${o.id} applied to ${n} element${n === 1 ? "" : "s"} in ${label} · copied for the agent`);
+    return;
+  }
+  const cp = e.target.closest("[data-copy]");
+  if (cp) { const d = decisionById[cp.dataset.copy]; copy(copyText(d, chosenOption(d, state.theme), state.theme)); return; }
+  const un = e.target.closest("[data-unchoose]");
+  if (un) { const c = state.choices[un.dataset.unchoose]; if (c && typeof c === "object") delete c[state.theme]; else delete state.choices[un.dataset.unchoose]; save(); renderChoice(un.dataset.unchoose); return; }
+  const tr = e.target.closest("tr[data-row]"); if (!tr) return;
+  const sel = window.getSelection();
+  if (e.detail && sel.toString() && tr.contains(sel.anchorNode)) return;
+  focusTokens(ROWS.find((r) => r.id === tr.dataset.row));
+});
+// Hovering an option outlines the same option in every other row of its decision.
+const rowsEl = document.getElementById("rows");
+rowsEl.addEventListener("mouseover", (e) => {
+  const opt = e.target.closest(".option"); if (!opt) return;
+  rowsEl.querySelectorAll(`.option[data-choose="${CSS.escape(opt.dataset.choose)}"][data-option="${CSS.escape(opt.dataset.option)}"]`).forEach((x) => x.classList.add("sync"));
+});
+rowsEl.addEventListener("mouseout", (e) => {
+  const opt = e.target.closest(".option"); if (!opt || opt.contains(e.relatedTarget)) return;
+  rowsEl.querySelectorAll(".option.sync").forEach((x) => x.classList.remove("sync"));
+});
+// Which element row is narrowing the palette, and which token is narrowing the table.
+// Not saved: a reload shows every token and every element again.
+let focusRowId = null;
+let focusToken = null;
+let filterGen = 0;
+let rowFilterGen = 0;
+function rowTokenNames(row) {
+  if (!row) return [];
+  const names = [row.fg, ...row.bg.slice().reverse(), row.border, row.inner, ...(row.parts || []).map((p) => p.fg)]
+    .filter(Boolean).map((s) => String(s).split("@")[0]).filter((n) => !n.startsWith("#"));
+  return [...new Set(names)];
+}
+function syncPaletteFilter(animate) {
+  const gen = ++filterGen;
+  const row = focusRowId ? ROWS.find((r) => r.id === focusRowId) : null;
+  const keep = row ? new Set(rowTokenNames(row)) : null;
+  const palette = document.getElementById("palette");
+  document.getElementById("showAllTokens").hidden = !keep;
+  const groups = new Set();
+  if (keep) for (const t of TOKENS) if (keep.has(t.name)) groups.add(t.group || "");
+  const items = [...palette.querySelectorAll(".pal-item")];
+  const reduce = !animate || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduce) {
+    palette.classList.add("is-filtering");
+    palette.offsetHeight;
+  } else palette.classList.remove("is-filtering");
+  for (const item of items) {
+    const out = !!keep && (item.dataset.pal ? !keep.has(item.dataset.pal) : !groups.has(item.dataset.group || ""));
+    item.classList.toggle("is-dim", out);
+    item.toggleAttribute("inert", out);
+    if (out) item.setAttribute("aria-hidden", "true");
+    else item.removeAttribute("aria-hidden");
+  }
+  markFilters();
+  if (reduce) return;
+  setTimeout(() => { if (gen === filterGen) palette.classList.remove("is-filtering"); }, 400);
+}
+function markFilters() {
+  document.querySelectorAll(".row-name").forEach((btn) => {
+    btn.setAttribute("aria-pressed", btn.closest("tr")?.dataset.row === focusRowId ? "true" : "false");
+  });
+  document.querySelectorAll(".tok .name").forEach((btn) => {
+    btn.setAttribute("aria-pressed", btn.closest(".tok")?.dataset.tok === focusToken ? "true" : "false");
+  });
+}
+function syncRowsFilter(animate) {
+  const gen = ++rowFilterGen;
+  const name = focusToken;
+  const tbody = document.getElementById("rows");
+  document.getElementById("showAllElements").hidden = !name;
+  const items = [...tbody.querySelectorAll("tr")];
+  const keepIds = new Set();
+  if (name) for (const row of ROWS) if (rowTokenNames(row).includes(name)) keepIds.add(row.id);
+  const dimOf = (tr, index) => {
+    if (!name) return false;
+    if (tr.dataset.row) return !keepIds.has(tr.dataset.row);
+    if (!tr.classList.contains("group") && !tr.classList.contains("decision-head")) return false;
+    for (let j = index + 1; j < items.length; j++) {
+      const next = items[j];
+      if (next.classList.contains("group")) break;
+      if (tr.classList.contains("decision-head") && next.classList.contains("decision-head")) break;
+      if (next.dataset.row && keepIds.has(next.dataset.row)) return false;
+    }
+    return true;
+  };
+  const reduce = !animate || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduce) {
+    tbody.classList.add("is-filtering");
+    tbody.offsetHeight;
+  } else tbody.classList.remove("is-filtering");
+  items.forEach((tr, i) => {
+    const out = dimOf(tr, i);
+    tr.classList.toggle("is-dim", out);
+    tr.toggleAttribute("inert", out);
+    if (out) tr.setAttribute("aria-hidden", "true");
+    else tr.removeAttribute("aria-hidden");
+  });
+  markFilters();
+  if (reduce) return;
+  setTimeout(() => { if (gen === rowFilterGen) tbody.classList.remove("is-filtering"); }, 400);
+}
+function focusElements(name) {
+  const same = focusToken === name;
+  focusToken = name;
+  if (!same) {
+    syncRowsFilter(true);
+    document.querySelector(".rows").scrollTop = 0;
+  }
+}
+function focusTokens(row) {
+  const same = focusRowId === row.id;
+  focusRowId = row.id;
+  if (!same) {
+    syncPaletteFilter(true);
+    document.querySelector(".palette").scrollTop = 0;
+  }
+  const names = rowTokenNames(row);
+  // Text-on-fill pairs: the fill (brand colour) is usually the one to tune.
+  let focus = names[0];
+  if (focus && focus.endsWith("-foreground") && names[1]) focus = names[1];
+  const target = document.querySelector(`.tok[data-tok="${CSS.escape(focus || "")}"]`);
+  if (!target) return;
+  const input = target.querySelector('input[type="text"]');
+  input.focus({ preventScroll: true }); input.select();
+}
+document.getElementById("showAllTokens").addEventListener("click", () => {
+  focusRowId = null;
+  syncPaletteFilter(true);
+});
+document.getElementById("showAllElements").addEventListener("click", () => {
+  focusToken = null;
+  syncRowsFilter(true);
+});
+document.getElementById("copyAllBtn").addEventListener("click", () => {
+  const theme = state.theme, list = pendingChoices(theme);
+  if (!list.length) return;
+  const label = THEMES.find((t) => t.id === theme)?.label || theme;
+  copy(list.map((d) => copyText(d, chosenOption(d, theme), theme)).join("\n\n"),
+    `${list.length} choice${list.length === 1 ? "" : "s"} in ${label} copied for the agent`);
+});
+document.getElementById("resetBtn").addEventListener("click", () => {
+  if (!confirm("Reset your palette edits and decision choices? The agent's data stays.")) return;
+  state.edits = {}; state.choices = {}; save(); render();
+});
+// "How to read": Escape hides it until the pointer or focus leaves (WCAG 1.4.13).
+const info = document.querySelector(".info");
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") info.classList.add("closed"); });
+info.addEventListener("mouseleave", () => info.classList.remove("closed"));
+info.addEventListener("focusout", () => info.classList.remove("closed"));
+// Sticky offsets follow the real header heights (the page header wraps on narrow screens).
+function setStickyTops() {
+  const root = document.documentElement.style;
+  // Rounded down, so each sticky layer overlaps the one above instead of leaving a hairline gap.
+  root.setProperty("--top-h", `${Math.floor(document.querySelector("header.top").getBoundingClientRect().height)}px`);
+  root.setProperty("--rows-title-h", `${Math.floor(document.getElementById("rowsTitle").getBoundingClientRect().height)}px`);
+}
+const stickyObs = new ResizeObserver(setStickyTops);
+stickyObs.observe(document.querySelector("header.top"));
+stickyObs.observe(document.getElementById("rowsTitle"));
+setStickyTops();
+render();
+</script>
+</body>
+</html>

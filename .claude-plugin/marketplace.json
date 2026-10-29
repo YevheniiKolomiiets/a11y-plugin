@@ -1,0 +1,12 @@
+{
+  "name": "a11y-local",
+  "description": "Local, unpublished plugins",
+  "owner": { "name": "Yevhenii Kolomiiets" },
+  "plugins": [
+    {
+      "name": "a11y",
+      "source": "./plugins/a11y",
+      "description": "Accessibility audit, contrast lab and decision log for web apps (WCAG 2.2)"
+    }
+  ]
+}

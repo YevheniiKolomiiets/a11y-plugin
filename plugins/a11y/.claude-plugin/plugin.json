@@ -1,0 +1,8 @@
+{
+  "name": "a11y",
+  "description": "Accessibility audit, contrast lab and decision log for web apps (WCAG 2.2).",
+  "version": "0.1.0",
+  "author": { "name": "Yevhenii Kolomiiets" },
+  "keywords": ["accessibility", "a11y", "wcag", "contrast", "audit"],
+  "types": "./types/index.d.ts"
+}

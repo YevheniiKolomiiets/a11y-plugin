@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "meta": {
+    "id": "example",
+    "title": "Contrast Lab · example",
+    "project": "Example",
+    "font": {
+      "stack": "\"Inter\", system-ui, sans-serif",
+      "css": []
+    }
+  },
+  "themes": [
+    { "id": "light", "label": "Light" },
+    { "id": "dark", "label": "Dark" }
+  ],
+  "tokens": [
+    { "name": "background", "group": "Surfaces", "desc": "Page background", "source": "src/app/globals.css:22", "values": { "light": "#f4f6f8", "dark": "#1a1412" } },
+    { "name": "card", "group": "Surfaces", "desc": "Cards and dialogs", "source": "src/app/globals.css:25", "values": { "light": "#ffffff", "dark": "#26201d" } },
+    { "name": "primary", "group": "Brand", "desc": "Logo colour: button fill (do not change)", "source": "src/app/globals.css:34", "values": { "light": "#e96d46", "dark": "#f0845f" } },
+    { "name": "primary-foreground", "group": "Brand", "desc": "Text on the primary fill", "source": "src/app/globals.css:35", "values": { "light": "#ffffff", "dark": "#2a1610" } },
+    { "name": "primary-text", "group": "Brand", "desc": "New: primary as a text colour. Today = primary", "values": { "light": "#e96d46", "dark": "#f0845f" } },
+    { "name": "sev-high", "group": "Hardcoded → new token", "desc": "HIGH: text-rose-600 in lib/severity.ts", "source": "src/lib/severity.ts:14", "values": { "light": "#ec003f", "dark": "#ec003f" } },
+    { "name": "sev-high-bg", "group": "Hardcoded → new token", "desc": "HIGH badge background: bg-rose-500/10", "source": "src/lib/severity.ts:15", "values": { "light": "#ff20561a", "dark": "#ff20561a" } }
+  ],
+  "proposal": {
+    "light": { "primary-foreground": "#2a1610", "primary-text": "#b94117" },
+    "dark": {}
+  },
+  "rows": [
+    { "id": "btn-primary", "group": "Brand", "label": "Primary button", "where": "ui/Button.tsx:5", "src": "audit", "routes": ["/login"],
+      "need": 4.5, "kind": "btn", "text": "Sign In", "fg": "primary-foreground", "bg": ["primary"], "stage": ["card"] },
+    { "id": "btn-primary-disabled", "group": "Brand", "label": "Primary button: disabled", "where": "ui/Button.tsx:44, disabled:opacity-50", "src": "audit",
+      "need": 4.5, "info": true, "opacity": 0.5, "base": "card", "kind": "btn", "text": "Sign In", "fg": "primary-foreground", "bg": ["primary"], "stage": ["card"] },
+    { "id": "eyebrow", "group": "Brand", "label": "Eyebrow on the page background", "where": "(home)/page.tsx:88", "src": "audit", "routes": ["/"],
+      "need": 4.5, "kind": "eyebrow", "text": "Browse by impact", "fg": "primary-text", "bg": ["background"] },
+    { "id": "sev-high", "group": "Severity", "label": "HIGH badge", "where": "ImpactGroupList.tsx:273, 9px", "src": "ticket 796", "routes": ["/bills/[id]"],
+      "need": 4.5, "kind": "sev", "text": "High", "fg": "sev-high", "bg": ["card", "sev-high-bg"], "decision": "severity" },
+    { "id": "sev-high-icon", "group": "Severity", "label": "Evidence icon: Mandates", "where": "ImpactEvidenceLinks.tsx:26", "src": "ticket 796",
+      "need": 3, "kind": "icon", "icon": "shield", "fg": "sev-high", "bg": ["card"], "decision": "severity" }
+  ],
+  "decisions": [
+    {
+      "id": "severity",
+      "title": "Severity HIGH",
+      "status": "open",
+      "chosen": null,
+      "options": [
+        { "id": "A", "label": "One step darker / lighter (700 / 400), solid 50 / 950 background",
+          "tokens": { "light": { "sev-high": "#c70036", "sev-high-bg": "#fff1f2" }, "dark": { "sev-high": "#ff637e", "sev-high-bg": "#4d0218" } } },
+        { "id": "B", "label": "One more step of contrast (800 / 300)",
+          "note": "Pastel in dark theme; levels are harder to tell apart",
+          "tokens": { "light": { "sev-high": "#a50036", "sev-high-bg": "#fff1f2" }, "dark": { "sev-high": "#ffa1ad", "sev-high-bg": "#4d0218" } } }
+      ]
+    }
+  ],
+  "icons": {
+    "shield": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"/></svg>"
+  }
+}
