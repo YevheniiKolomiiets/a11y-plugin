@@ -10,6 +10,7 @@
 // "Proposal" = current values + lab.json `proposal` + options recorded per theme in decisions,
 // the same as the lab's proposal column without the viewer's browser edits.
 import { readFileSync } from "node:fs";
+import { measure as measureRaw, measureCurrent, toHex } from "./lab-math.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
@@ -26,37 +27,12 @@ const picked = recordedThemes(target);
 const themes = (opt("--themes")?.split(",") ?? (picked.length ? picked : target?.themes ?? lab.themes.map((t) => t.id))).filter((t) => lab.themes.some((x) => x.id === t));
 const en = opt("--lang") === "en";
 const L = en
-  ? { token: "Token", now: "Today", element: "Element", pair: "Pair (proposal)", current: "Current", proposal: "Proposal", need: "Threshold", exempt: "exempt", unchanged: "unchanged", new: "new" }
-  : { token: "Токен", now: "Зараз", element: "Елемент", pair: "Пара (пропозиція)", current: "Зараз", proposal: "Пропозиція", need: "Поріг", exempt: "виняток", unchanged: "без змін", new: "новий" };
+  ? { token: "Token", now: "Today", element: "Element", pair: "Pair (proposal)", current: "Current", proposal: "Proposal", need: "Threshold", exempt: "exempt", unchanged: "unchanged", new: "new", notDrawn: "not drawn" }
+  : { token: "Токен", now: "Зараз", element: "Елемент", pair: "Пара (пропозиція)", current: "Зараз", proposal: "Пропозиція", need: "Поріг", exempt: "виняток", unchanged: "без змін", new: "новий", notDrawn: "не малюється" };
 if (!decisionId && !rowIds) { console.error("usage: contrast-table.mjs <lab.json> --decision <id> | --rows <ids>"); process.exit(2); }
 
-// ── maths (same as templates/lab.html) ──
-const parseHex = (h) => {
-  h = String(h).trim().replace(/^#/, "");
-  if (!/^[0-9a-f]{6}([0-9a-f]{2})?$/i.test(h)) return null;
-  const n = (i) => parseInt(h.slice(i, i + 2), 16);
-  return [n(0), n(2), n(4), h.length === 8 ? n(6) / 255 : 1];
-};
-const toHex = ([r, g, b]) => "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
-const over = (t, b) => [0, 1, 2].map((i) => t[i] * t[3] + b[i] * (1 - t[3])).concat(1);
-const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
-const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
-const resolve = (spec, pal) => {
-  const [name, alpha] = String(spec).split("@");
-  const c = parseHex(name.startsWith("#") ? name : pal[name]);
-  if (!c) throw new Error(`cannot resolve ${spec}`);
-  return [c[0], c[1], c[2], c[3] * (alpha ? parseFloat(alpha) : 1)];
-};
-const flatten = (layers, pal) => { let a = resolve(layers[0], pal); a = [a[0], a[1], a[2], 1]; for (const l of layers.slice(1)) a = over(resolve(l, pal), a); return a; };
-const measure = (row, pal) => {
-  let bg = flatten(row.bg, pal), fg = over(resolve(row.fg, pal), bg);
-  if (row.opacity != null) {
-    const base = flatten([row.base || row.bg[0]], pal);
-    bg = over([bg[0], bg[1], bg[2], row.opacity], base);
-    fg = over([fg[0], fg[1], fg[2], row.opacity], base);
-  }
-  return { fg: toHex(fg), bg: toHex(bg), ratio: contrast(fg, bg) };
-};
+// Maths: scripts/lab-math.mjs, the same as templates/lab.html.
+const measure = (row, pal) => { const m = measureRaw(row, pal); return { ...m, fg: toHex(m.fg), bg: toHex(m.bg) }; };
 
 const current = {}, proposed = {};
 for (const t of lab.themes) {
@@ -101,8 +77,9 @@ for (const r of rows) {
   const ts = themes.filter((t) => !r.themes || r.themes.includes(t));
   const cells = themes.map((t) => {
     if (!ts.includes(t)) return "—";
-    const c = measure(r, current[t]), p = measure(r, proposed[t]);
-    return `${fmt(c.ratio, r.need, r.info)} → ${fmt(p.ratio, r.need, r.info)}`;
+    // Current: the audit's measurement where the row has one (a structural defect), else the code colours.
+    const c = measureCurrent(r, current[t], t), p = measure(r, proposed[t]);
+    return `${c.missing ? `✗ ${L.notDrawn}` : fmt(c.ratio, r.need, r.info)} → ${fmt(p.ratio, r.need, r.info)}`;
   });
   const pairs = ts.map((t) => { const p = measure(r, proposed[t]); return `${label(t)}: \`${p.fg}\` / \`${p.bg}\``; }).join("; ");
   out.push(`| ${r.label} | ${r.info ? L.exempt : r.need.toFixed(1)} | ${cells.join(" | ")} | ${pairs} |`);

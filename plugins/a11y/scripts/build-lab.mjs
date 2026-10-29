@@ -5,6 +5,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { measure, measureCurrent } from "./lab-math.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const [inPath, outArg] = process.argv.slice(2);
@@ -16,7 +17,8 @@ const problems = [];
 
 const HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/i;
 const KINDS = new Set(["text", "tiny", "eyebrow", "display", "link", "link-icon", "btn", "edge", "chip", "badge",
-  "sev", "pill", "plate", "avatar", "icon", "input", "field", "logo", "footer", "in-row", "stack"]);
+  "sev", "pill", "plate", "avatar", "icon", "input", "field", "logo", "footer", "in-row", "stack", "focus"]);
+const SHAPES = new Set(["btn", "item", "icon", "toggle"]);
 
 if (data.version !== 1) problems.push(`version must be 1, got ${data.version}`);
 if (!data.meta?.id) problems.push("meta.id is required (key for saved browser edits)");
@@ -69,10 +71,27 @@ for (const r of data.rows || []) {
   checkRef(`${w}.border`, r.border);
   checkRef(`${w}.inner`, r.inner);
   checkRef(`${w}.base`, r.base);
+  if (r.noDecision != null && (typeof r.noDecision !== "string" || !r.noDecision.trim())) problems.push(`${w}.noDecision: say why no colour choice fixes it`);
+  if (r.noDecision && r.decision) problems.push(`${w}: decision and noDecision together`);
   for (const p of r.parts || []) checkRef(`${w}.parts`, p.fg);
   for (const th of r.themes || []) if (!themes.includes(th)) problems.push(`${w}: unknown theme ${th}`);
   if (r.decision && !decisionIds.has(r.decision)) problems.push(`${w}: unknown decision ${r.decision}`);
-  if (r.kind === "icon" && r.icon && !data.icons?.[r.icon]) problems.push(`${w}: unknown icon ${r.icon}`);
+  if ((r.kind === "icon" || r.control?.shape === "icon") && r.icon && !data.icons?.[r.icon]) problems.push(`${w}: unknown icon ${r.icon}`);
+  if (r.kind === "focus") {
+    const c = r.control || {};
+    if (c.shape && !SHAPES.has(c.shape)) problems.push(`${w}.control.shape: one of ${[...SHAPES].join(" | ")}`);
+    checkRef(`${w}.control.fg`, c.fg);
+    for (const b of c.bg || []) checkRef(`${w}.control.bg`, b);
+    checkRef(`${w}.control.border`, c.border);
+    checkRef(`${w}.control.groupBorder`, c.groupBorder);
+    for (const k of ["offset", "width"]) if (r[k] != null && typeof r[k] !== "number") problems.push(`${w}.${k}: a number of px`);
+  } else if (r.control) problems.push(`${w}: control is only for kind focus`);
+  // measured: { theme: { ratio, fg, bg, note } } from the audit; no ratio = nothing drawn to measure.
+  for (const [th, m] of Object.entries(r.measured || {})) {
+    if (!themes.includes(th)) problems.push(`${w}.measured: unknown theme ${th}`);
+    if (m.ratio != null && !(typeof m.ratio === "number" && HEX.test(m.fg ?? "") && HEX.test(m.bg ?? ""))) problems.push(`${w}.measured.${th}: ratio needs fg and bg as #rrggbb`);
+    if (m.ratio == null && !m.note) problems.push(`${w}.measured.${th}: without a ratio, say in note what the audit saw`);
+  }
 }
 for (const d of data.decisions || []) {
   const w = `decision ${d.id}`;
@@ -93,6 +112,91 @@ for (const d of data.decisions || []) {
   if (d.status === "open" && complete) problems.push(`${w}: every theme has a chosen option, status should be recorded`);
   for (const o of d.options || []) checkTokenMap(`${w}.option ${o.id}.tokens`, o.tokens);
   if (!(data.rows || []).some((r) => r.decision === d.id)) problems.push(`${w}: no rows point to it`);
+}
+
+// Reconciliation with the audit: what the lab calls failing now must be what the audit found failing.
+// meta.auditFails: { theme: { finding: count } } — the failing pairs of each finding's tables in the report.
+// Rows carry `finding` (the report's id, e.g. "С2"); rows whose src is not the audit (code, ticket) are not reconciled.
+const nowFailing = {};
+if (!problems.length) {
+  for (const th of themes) {
+    const pal = Object.fromEntries(data.tokens.map((t) => [t.name, t.values[th]]));
+    nowFailing[th] = [];
+    for (const r of data.rows) {
+      if (r.info || (r.themes && !r.themes.includes(th))) continue;
+      const m = measureCurrent(r, pal, th);
+      if (m.missing || m.ratio < r.need) nowFailing[th].push({ row: r, ratio: m.missing ? null : m.ratio });
+    }
+  }
+  const fromAudit = (r) => String(r.src || "").startsWith("аудит") || String(r.src || "").startsWith("audit");
+  const audit = data.meta.auditFails;
+  if (!audit) console.warn("warning: meta.auditFails is missing, the lab is not reconciled with the audit");
+  for (const th of themes) {
+    const fails = nowFailing[th];
+    console.log(`${th}: failing now ${fails.length} — ${fails.map((f) => `${f.row.id}${f.row.finding ? ` [${f.row.finding}]` : ""} ${f.ratio == null ? "not drawn" : f.ratio.toFixed(2)}`).join(", ") || "none"}`);
+    if (!audit) continue;
+    const want = audit[th] || {};
+    for (const [finding, n] of Object.entries(want)) {
+      const got = fails.filter((f) => f.row.finding === finding).length;
+      if (n > 0 && !got) problems.push(`${th}: the audit has ${n} failing for ${finding}, the lab has none failing now — a row is missing or modelled wrong (background, opacity, measured)`);
+      else if (got !== n) console.warn(`warning: ${th} ${finding}: audit ${n}, lab ${got} failing now — fine only if the rows group the report's pairs differently`);
+    }
+    for (const f of fails) {
+      if (!fromAudit(f.row)) continue;
+      if (!f.row.finding) problems.push(`row ${f.row.id}: fails now in ${th} and comes from the audit, but names no finding`);
+      else if (!want[f.row.finding]) problems.push(`row ${f.row.id}: fails now in ${th} (${f.ratio == null ? "not drawn" : f.ratio.toFixed(2)}), but the audit has no failure for ${f.row.finding} in ${th} — model it as measured, or mark it src "код" if it is a finding of the lab's own`);
+    }
+  }
+}
+
+// Decisions: the palette the Proposal column shows (code + proposal + recorded choices), and the same with one option on top.
+const recordedOption = (d, th) => {
+  const id = typeof d.chosen === "string" ? d.chosen : d.chosen?.[th];
+  return id ? d.options.find((o) => o.id === id) : null;
+};
+const covers = (d, th) => !d.themes?.length || d.themes.includes(th);
+const proposalPalette = (th, skip) => {
+  const pal = Object.fromEntries(data.tokens.map((t) => [t.name, t.values[th]]));
+  Object.assign(pal, data.proposal?.[th] || {});
+  for (const d of data.decisions || []) if (d !== skip && covers(d, th)) Object.assign(pal, recordedOption(d, th)?.tokens?.[th] || {});
+  return pal;
+};
+const appliesTo = (r, th) => !r.info && (!r.themes || r.themes.includes(th));
+const fmt = (m) => m.ratio.toFixed(2);
+
+if (!problems.length) {
+  // Every option must fix every row of its decision, in every theme it gives values for:
+  // an option that leaves its own rows failing is not a way out, whatever its note says.
+  for (const d of data.decisions || []) {
+    const rows = data.rows.filter((r) => r.decision === d.id);
+    for (const o of d.options) {
+      for (const th of Object.keys(o.tokens || {})) {
+        if (!covers(d, th)) { problems.push(`decision ${d.id}.option ${o.id}: gives values for ${th}, which the decision does not cover`); continue; }
+        const pal = { ...proposalPalette(th, d), ...o.tokens[th] };
+        for (const r of rows.filter((x) => appliesTo(x, th))) {
+          const m = measure(r, pal);
+          if (m.ratio < r.need) problems.push(`decision ${d.id}.option ${o.id} (${th}): row ${r.id} still fails, ${fmt(m)} < ${r.need}`);
+        }
+      }
+    }
+  }
+
+  // Coverage: a row failing in the Proposal column is either in a decision for that theme, or says why no colour
+  // choice fixes it (noDecision). Groups are worked one at a time, so this is a list of what is left, not an error.
+  for (const th of themes) {
+    const pal = proposalPalette(th);
+    const left = new Map();
+    for (const r of data.rows) {
+      if (!appliesTo(r, th) || r.noDecision) continue;
+      const d = r.decision && (data.decisions || []).find((x) => x.id === r.decision);
+      if (d && covers(d, th)) continue;
+      const m = measure(r, pal);
+      if (m.ratio >= r.need) continue;
+      const g = r.group || "(no group)";
+      left.set(g, [...(left.get(g) || []), `${r.id} ${fmt(m)}`]);
+    }
+    for (const [g, ids] of left) console.warn(`warning: ${th}: «${g}» fails with no decision for this theme — ${ids.join(", ")}`);
+  }
 }
 
 if (problems.length) {

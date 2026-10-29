@@ -56,6 +56,7 @@ plugins/a11y/
   scripts/check-report.mjs        самоперевірка звіту: посилання, скріншоти, якорі
   scripts/build-lab.mjs           перевірка lab.json і збірка lab.html
   scripts/contrast-table.mjs      таблиці токенів і контрасту для документа рішень
+  scripts/lab-math.mjs            спільна математика контрасту для build-lab і contrast-table
   examples/lab.json               короткий приклад: 7 токенів, 5 рядків, одне рішення
 ```
 

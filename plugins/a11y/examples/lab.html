@@ -208,6 +208,16 @@
   .s-plate { padding: 4px 10px; border-radius: 999px; border: 1px solid; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
   .s-avatar { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
   .s-icon svg { width: 18px; height: 18px; display: block; }
+  .s-icon-plate { display: inline-flex; padding: 8px 12px; border-radius: 6px; }
+  /* kind focus: a control with its ring; the stage leaves room for an outer outline */
+  .s-ctl { display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; }
+  .s-ctl-btn { border-radius: 8px; padding: 6px 14px; }
+  .s-ctl-item { border-radius: 6px; padding: 4px 8px; min-width: 140px; }
+  .s-ctl-icon { border-radius: 50%; padding: 6px; border-color: transparent; }
+  .s-ctl-icon svg { width: 20px; height: 20px; display: block; }
+  .s-toggle { display: inline-flex; border: 1px solid; border-radius: 8px; overflow: hidden; }
+  .s-ctl-seg { padding: 6px 14px; border: 0; border-radius: 0; }
+  .measured { display: block; font-size: 11px; color: var(--ui-muted); }
   .s-input { padding: 7px 10px; border-radius: 8px; border: 1px solid; min-width: 120px; }
   .s-stack { display: flex; flex-direction: column; gap: 4px; }
   .s-logo { display: flex; flex-direction: column; line-height: .95; }
@@ -233,7 +243,7 @@
   <section class="panel rows" aria-labelledby="rowsTitleText">
     <div class="rows-head" id="rowsTitle"><h2 id="rowsTitleText">Elements</h2><span class="info">
       <button type="button" class="info-btn" aria-label="How to read" aria-describedby="howTo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button>
-      <span class="pop" id="howTo" role="tooltip"><span class="pop-box"><b>How to read.</b> “Current implementation” shows the colours from the code. “Proposal” uses the palette on the left: agreed values, chosen decision options and your own edits (saved in this browser only). Threshold is 4.5 for text and 3.0 for large text, icons and boundaries. Translucent layers and <code>opacity</code> are blended onto the background before the ratio is computed. Green row: the proposal passes. Reddish: changed but still failing. Plain: unchanged and failing. Click a row, or focus its name and press Enter, to see only its tokens in the palette. Show all tokens brings the rest back. Click a token, or focus its name and press Enter, to see only the elements that use it. Show all elements brings the rest back. In an open decision, click an option to choose it for the theme you are looking at and copy the choice for the agent; other themes stay open.</span></span>
+      <span class="pop" id="howTo" role="tooltip"><span class="pop-box"><b>How to read.</b> “Current implementation” shows the colours from the code. “Proposal” uses the palette on the left: agreed values, chosen decision options and your own edits (saved in this browser only). Threshold is 4.5 for text and 3.0 for large text, icons and boundaries. Translucent layers and <code>opacity</code> are blended onto the background before the ratio is computed. A row marked “measured in the audit” shows in Current what the audit measured, because the code’s colours are not what ships (for example a focus ring the theme declares but a component removes); its Proposal assumes that fix. Focus rows draw the real control with its ring and take the worse of ring / surface around and ring / control. “Failing now” counts Current, “still failing” counts Proposal. Green row: the proposal passes. Reddish: changed but still failing. Plain: unchanged and failing. Click a row, or focus its name and press Enter, to see only its tokens in the palette. Show all tokens brings the rest back. Click a token, or focus its name and press Enter, to see only the elements that use it. Show all elements brings the rest back. In an open decision, click an option to choose it for the theme you are looking at and copy the choice for the agent; other themes stay open.</span></span>
     </span>
     <button type="button" class="btn pal-show" id="showAllElements" hidden>Show all elements</button>
     </div>
@@ -289,7 +299,40 @@ function flatten(layers, pal) {
   for (const l of layers.slice(1)) acc = over(resolve(l, pal), acc);
   return acc;
 }
+// kind "focus": the ring is an outline `width` px wide, `offset` px from the control's border edge (negative = inside).
+// It has to stand out from what it touches: the surface outside the control, the control itself inside.
+function focusGeometry(row, pal) {
+  const surface = flatten(row.bg, pal);
+  const c = row.control || {};
+  const fill = c.bg?.length ? flatten([...row.bg, ...c.bg], pal) : surface;
+  const edge = c.border ? over(resolve(c.border, pal), fill) : fill;
+  const width = row.width ?? 2, offset = row.offset ?? 2;
+  // What the band is painted over, and what lies just outside and just inside it.
+  const backdrops = offset >= 0 ? [surface] : offset + width <= 0 ? [fill] : [surface, fill];
+  const outer = offset + width >= 0 ? surface : fill;
+  const inner = offset > 0 ? surface : offset === 0 ? edge : fill;
+  return { surface, fill, edge, width, offset, backdrops, neighbours: [outer, inner] };
+}
+function measureFocus(row, pal) {
+  const g = focusGeometry(row, pal), ring = resolve(row.fg, pal);
+  let worst = null;
+  for (const b of g.backdrops) for (const n of g.neighbours) {
+    const fg = over(ring, b), ratio = contrast(fg, n);
+    if (!worst || ratio < worst.ratio) worst = { fg, bg: n, ratio };
+  }
+  return worst;
+}
+// The Current column: what the audit measured, when the row carries it for this theme (a structural defect,
+// e.g. a focus ring the code declares but never draws); otherwise the code colours.
+// `missing`: the audit saw nothing to measure (no ring at all) — that fails whatever the threshold.
+function measureCurrent(row, pal, theme) {
+  const m = row.measured?.[theme];
+  if (!m) return { ...measure(row, pal), measured: false };
+  if (m.ratio == null) return { fg: null, bg: null, ratio: 0, measured: true, missing: true, note: m.note };
+  return { fg: parseHex(m.fg), bg: parseHex(m.bg), ratio: m.ratio, measured: true, note: m.note };
+}
 function measure(row, pal) {
+  if (row.kind === "focus") return measureFocus(row, pal);
   let bg = flatten(row.bg, pal);
   let fg = over(resolve(row.fg, pal), bg);
   if (row.opacity != null) {
@@ -380,9 +423,34 @@ const FONT = {
   text: [500, 12], tiny: [400, 9], eyebrow: [700, 11], display: [400, 40], link: [600, 13], "link-icon": [400, 12],
   btn: [600, 13], edge: [600, 13], chip: [500, 10], badge: [600, 12], sev: [900, 9], pill: [700, 10], plate: [700, 8],
   logo: [400, 26], avatar: [900, 9], icon: [400, 12], input: [400, 13], field: [400, 13], footer: [400, 10], "in-row": [900, 9], stack: [600, 10],
+  focus: [600, 13],
 };
+// kind "focus": the real control (its fill, text, border) on its surface, with the ring as an outline.
+// `ringless`: the Current column of a row whose ring the audit found not drawn — the control as it is today.
+function focusSample(row, pal, ringless) {
+  const g = focusGeometry(row, pal), c = row.control || {};
+  const text = toHex(over(resolve(c.fg || "#000000", pal), g.fill));
+  const ring = resolve(row.fg, pal);
+  const outline = ringless ? "outline:none" : `outline:${g.width}px solid rgba(${ring.slice(0, 3).map(Math.round).join(",")},${ring[3]});outline-offset:${g.offset}px`;
+  const border = c.border ? `border-color:${toHex(g.edge)}` : "";
+  const [dw, ds] = FONT.focus;
+  const font = `font:${row.weight ?? dw} ${row.size ?? ds}px var(--app-font);`;
+  const label = esc(c.text ?? row.text ?? "");
+  const shape = c.shape || "btn";
+  const ctl = (cls, inner) => `<span class="s s-ctl ${cls}" style="${font}background:${toHex(g.fill)};color:${text};${border};${outline}">${inner}</span>`;
+  if (shape === "icon") return `<div class="stage" style="background:${toHex(g.surface)}">${ctl("s-ctl-icon", ICONS[row.icon] || ICON_DEFAULT)}</div>`;
+  if (shape === "item") return `<div class="stage" style="background:${toHex(g.surface)}">${ctl("s-ctl-item", label)}</div>`;
+  if (shape === "toggle") {
+    // A segmented group clips its children (overflow: hidden), so an outer ring is cut off — as in MUI.
+    const groupBorder = c.groupBorder ? toHex(over(resolve(c.groupBorder, pal), g.surface)) : "transparent";
+    const seg = `<span class="s s-ctl-seg" style="${font}color:${text}">…</span>`;
+    return `<div class="stage" style="background:${toHex(g.surface)}"><span class="s-toggle" style="border-color:${groupBorder};background:${toHex(g.surface)}">${seg}${ctl("s-ctl-seg", label)}${seg}</span></div>`;
+  }
+  return `<div class="stage" style="background:${toHex(g.surface)}">${ctl("s-ctl-btn", label)}</div>`;
+}
 // `proposal` is true in the Proposal column: parts with proposalWeight show the weight being proposed.
-function sample(row, pal, proposal = true) {
+function sample(row, pal, proposal = true, ringless = false) {
+  if (row.kind === "focus") return focusSample(row, pal, ringless);
   const { bg, fg } = measure(row, pal);
   const bgHex = toHex(bg), fgHex = toHex(fg);
   const stageHex = toHex(flatten(row.stage || [row.bg[0]], pal));
@@ -404,7 +472,11 @@ function sample(row, pal, proposal = true) {
     case "pill": return st(`<span class="s s-pill" style="${font}background:${bgHex};color:${fgHex}">${t}</span>`);
     case "plate": return st(`<span class="s s-plate s-up" style="${font}letter-spacing:.08em;background:${bgHex};color:${fgHex};border-color:${border}">${t}</span>`, bgHex);
     case "avatar": return st(`<span class="s s-avatar" style="${font}background:${bgHex};color:${fgHex}">${t}</span>`);
-    case "icon": return st(`<span class="s-icon" style="color:${fgHex}">${ICONS[row.icon] || ICON_DEFAULT}</span>`, row.stage ? stageHex : bgHex);
+    // The icon sits on its own background (bg) — a plate inside the stage when the surroundings differ.
+    case "icon": {
+      const icon = `<span class="s-icon" style="color:${fgHex}">${ICONS[row.icon] || ICON_DEFAULT}</span>`;
+      return row.stage ? st(`<span class="s-icon-plate" style="background:${bgHex}">${icon}</span>`) : st(icon, bgHex);
+    }
     case "input": return st(`<span class="s s-input" style="${font}background:${bgHex};color:${fgHex};border-color:${row.border ? border : toHex(over([fg[0], fg[1], fg[2], 0.3], bg))}">${t}</span>`);
     case "field": {
       const inner = row.inner ? toHex(over(resolve(row.inner, pal), bg)) : toHex(over([fg[0], fg[1], fg[2], 0.6], bg));
@@ -430,6 +502,18 @@ function ratioLine(row, pal) {
   if (row.info) return `<span class="ratio">${m.ratio.toFixed(2)}:1 <span class="pair">${toHex(m.fg)} / ${toHex(m.bg)}</span></span>`;
   const ok = m.ratio >= row.need;
   return `<span class="ratio ${ok ? "pass" : "fail"}">${ok ? "✓" : "✗"} ${m.ratio.toFixed(2)}:1 <span class="pair">${toHex(m.fg)} / ${toHex(m.bg)}</span></span>`;
+}
+// The Current column. A measured row shows the audit's numbers and the control as it is (a focus row: no ring).
+function currentCell(row, pal, theme) {
+  const m = measureCurrent(row, pal, theme);
+  if (!m.measured) return `<div class="cell">${sample(row, pal, false)}${ratioLine(row, pal)}</div>`;
+  const shown = row.kind === "focus" ? sample(row, pal, false, true)
+    : sample({ ...row, fg: toHex(m.fg), bg: [toHex(m.bg)], opacity: undefined }, pal, false);
+  const ok = !m.missing && m.ratio >= row.need;
+  const ratio = m.missing
+    ? `<span class="ratio fail">✗ not drawn</span>`
+    : `<span class="ratio ${row.info ? "" : ok ? "pass" : "fail"}">${row.info ? "" : ok ? "✓ " : "✗ "}${m.ratio.toFixed(2)}:1 <span class="pair">${toHex(m.fg)} / ${toHex(m.bg)}</span></span>`;
+  return `<div class="cell">${shown}${ratio}<span class="measured">measured in the audit${m.note ? `: ${esc(m.note)}` : ""}</span></div>`;
 }
 
 // ── Rendering ──
@@ -482,7 +566,7 @@ function proposalCell(row, theme) {
 const rowSlot = (inner) => `<div class="row-slot"><div class="row-clip"><div class="row-face">${inner}</div></div></div>`;
 function renderRows() {
   const theme = state.theme, cur = current[theme], prop = proposed(theme);
-  let html = "", lastGroup = null, lastDecision = null, total = 0, failing = 0, open = 0;
+  let html = "", lastGroup = null, lastDecision = null, total = 0, failing = 0, failingNow = 0, open = 0;
   const list = rowsFor(theme);
   for (const row of list) {
     if (row.group !== lastGroup) { html += `<tr class="group"><td colspan="4">${rowSlot(esc(row.group || ""))}</td></tr>`; lastGroup = row.group; lastDecision = null; }
@@ -493,20 +577,23 @@ function renderRows() {
     }
     lastDecision = d ? d.id : null;
     const pending = d && !chosenOption(d, theme);
-    const mc = measure(row, cur), mp = measure(row, prop);
+    const mc = measureCurrent(row, cur, theme), mp = measure(row, prop);
     if (!row.info) {
       total++;
       // Proposal palette: code colours + the viewer's choices and edits; a row awaiting a choice keeps the code colour.
       if (mp.ratio < row.need) failing++;
+      // Now: what ships today — the audit's measurement where the row has one.
+      if (mc.missing || mc.ratio < row.need) failingNow++;
     }
-    const changed = toHex(mc.fg) !== toHex(mp.fg) || toHex(mc.bg) !== toHex(mp.bg);
+    // A measured row always changes: the proposal assumes the structural fix it is waiting for.
+    const changed = mc.measured || toHex(mc.fg) !== toHex(mp.fg) || toHex(mc.bg) !== toHex(mp.bg);
     const fails = !row.info && mp.ratio < row.need;
     // Green: the proposal passes. Red: changed but still failing. Plain: untouched and failing, or awaiting a choice.
     const cls = pending ? "" : changed ? (fails ? "changed-fail" : "pass") : !row.info && !fails ? "pass" : "";
     const classes = [cls, d ? "in-decision" : ""].filter(Boolean).join(" ");
     html += `<tr data-row="${esc(row.id)}"${d ? ` data-decision="${esc(d.id)}"` : ""}${classes ? ` class="${classes}"` : ""}>
       <td class="el">${rowSlot(`<button type="button" class="row-name" aria-pressed="false">${esc(row.label)}</button><small>${esc(row.where || "")}</small>${row.hint ? `<small>${esc(row.hint)}</small>` : ""}${row.src ? `<span class="src">Source: ${esc(row.src)}</span>` : ""}`)}</td>
-      <td>${rowSlot(`<div class="cell">${sample(row, cur, false)}${ratioLine(row, cur)}</div>`)}</td>
+      <td>${rowSlot(currentCell(row, cur, theme))}</td>
       <td>${rowSlot(`<div class="h-anim"><div class="h-anim-in">${proposalCell(row, theme)}</div></div>`)}</td>
       <td class="need">${rowSlot(row.info ? "WCAG<br>exempt" : `≥ ${Number(row.need).toFixed(1)}`)}</td>
     </tr>`;
@@ -515,8 +602,8 @@ function renderRows() {
   document.getElementById("rows").innerHTML = html;
   const label = THEMES.find((t) => t.id === theme)?.label || theme;
   document.getElementById("summary").innerHTML = !failing && !open
-    ? `<span class="all-pass">✓ ${esc(label)}: all ${total} elements pass</span>`
-    : `${esc(label)}: still failing <b>${failing}</b> of ${total} · <b>${open}</b> decision${open === 1 ? "" : "s"} left`;
+    ? `<span class="all-pass">✓ ${esc(label)}: all ${total} elements pass</span> · failing now ${failingNow}`
+    : `${esc(label)}: failing now <b>${failingNow}</b> · still failing <b>${failing}</b> of ${total} · <b>${open}</b> decision${open === 1 ? "" : "s"} left`;
   const n = pendingChoices(theme).length, all = document.getElementById("copyAllBtn");
   all.textContent = n ? `Copy all choices (${n})` : "Copy all choices";
   all.disabled = !n;
@@ -660,7 +747,9 @@ let filterGen = 0;
 let rowFilterGen = 0;
 function rowTokenNames(row) {
   if (!row) return [];
-  const names = [row.fg, ...row.bg.slice().reverse(), row.border, row.inner, ...(row.parts || []).map((p) => p.fg)]
+  const c = row.control || {};
+  const names = [row.fg, ...row.bg.slice().reverse(), row.border, row.inner, ...(row.parts || []).map((p) => p.fg),
+    c.fg, ...(c.bg || []), c.border, c.groupBorder]
     .filter(Boolean).map((s) => String(s).split("@")[0]).filter((n) => !n.startsWith("#"));
   return [...new Set(names)];
 }
